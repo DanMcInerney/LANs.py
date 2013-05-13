@@ -22,12 +22,13 @@ if not os.geteuid()==0:
 
 #Create the arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing", action="store_true")
-parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting", action="store_true")
-parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning")
-parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet", action="store_true")
-parser.add_argument("-g", "--google", help="Print google searches", action="store_true")
-parser.add_argument("-s", "--sslstrip", help="Run sslstrip and output to sslstrip.txt", action="store_true")
+parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Use -uv to print all URLs.", action="store_true")
+parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting.", action="store_true")
+parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
+parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
+parser.add_argument("-g", "--google", help="Print google searches.", action="store_true")
+parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
+parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits.", action="store_true")
 args = parser.parse_args()
 
 #Find the gateway and use it as the router's info
@@ -84,6 +85,11 @@ def URL(pkt):
 			c = a[0].split(" ")
 			url = b[1]+c[1]
 			if args.urlspy:
+				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
+				if any(i in url for i in d):
+					return
+				print url
+			if args.verboseURL:
 				print url
 			if args.google:
 				if 'google' in url:
