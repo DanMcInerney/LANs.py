@@ -57,6 +57,7 @@ routerIP = routerRE.group(1)
 IPprefix = routerRE.group(2)
 interface = routerRE.group(3)
 localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
+localMAC = get_if_hwaddr(interface)
 
 print "Checking the DHCP and DNS server addresses...\n"
 dhcp = (Ether(dst='ff:ff:ff:ff:ff:ff')/
@@ -93,13 +94,14 @@ else:
 		print ips
 	victimIP = raw_input('\nType victim\'s IP: ')
 
-print "Active interface: " + interface
-print "Router IP: " + routerIP
-print "Client IP: " + victimIP
-print "Local IP: " + localIP
-print "DHCP server: " + DHCPsrvr
-print "DNS server: " + DNSsrvr
-print "Local domain: " + localDomain
+print "\n[+] Active interface: " + interface
+print "[+] Local IP: " + localIP
+print "[+] Interface MAC: " + localMAC
+print "[+] DHCP server: " + DHCPsrvr
+print "[+] DNS server: " + DNSsrvr
+print "[+] Local domain: " + localDomain
+print "[+] Router IP: " + routerIP
+print "[+] Client IP: " + victimIP
 
 def originalMAC(ip):
 	# srp is for layer 2 packets with Ether layer, sr is for layer 3 packets like ARP and IP
@@ -237,9 +239,9 @@ class driftnet(threading.Thread):
 
 try:
 	routerMAC = originalMAC(routerIP)
-	print "Router MAC: " + routerMAC
+	print "[+] Router MAC: " + routerMAC
 	victimMAC = originalMAC(victimIP)
-	print "Victim MAC: " + victimMAC + "\n"
+	print "[+] Victim MAC: " + victimMAC + "\n"
 except:
 	sys.exit("Could not get MAC addresses")
 
