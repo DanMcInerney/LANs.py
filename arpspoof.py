@@ -70,6 +70,7 @@ dhcp = (Ether(dst='ff:ff:ff:ff:ff:ff')/
 			chr(DHCPRevOptions["server_id"][0]),
 			chr(DHCPRevOptions["name_server"][0]),
 			), "end"]))
+
 ans, unans = srp(dhcp, timeout=5, retry=1)
 if ans:
 	for s,r in ans:
@@ -78,6 +79,8 @@ if ans:
 		for idx,x in enumerate(DHCPopt):
 			if 'domain' in x:
 				localDomain = DHCPopt[idx][1]
+			else:
+				localDomain = 'None'
 			if 'name_server' in x:
 				DNSsrvr = DHCPopt[idx][1]
 else:
@@ -130,29 +133,48 @@ def URL(pkt):
 			headers = pkt
 			body = ''
 
-		if args.post and len(headers) < 450 and not get:
-			username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
-			password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
-			if username != [] or password != []:
-				print colors.TAN+'[+] Packet may\'ve been split. Data:',body+colors.ENDC
+		headLines = headers.split(r"\r\n")
+		for l in headLines:
+			searchHost = re.search('[Hh]ost: ', l)
+			searchGet = re.search('GET /', l)
+			searchPost = re.search('POST /', l)
+			if searchHost:
+				host = l.split(' ')
+				host = host[1]
+			if searchGet:
+				get = l.split(' ')
+				get = get[1]
+			if searchPost:
+				post = l.split(' ')
+				post = post[1]
+
+		if args.post and len(pkt) < 450:
 			if body != '':
-				for x in username:
-					for u in x:
-						if '=' in u:
-							print colors.RED+u+colors.ENDC
-				for y in password:
-					for p in y:
-						if '=' in p:
-							print colors.RED+p+colors.ENDC
-			else:
-				for x in username:
-					for u in x:
-						if '=' in u:
-							print colors.RED+u+colors.ENDC
-				for y in password:
-					for p in y:
-						if '=' in p:
-							print colors.RED+p+colors.ENDC
+				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+				if username != [] or password != []:
+					print colors.TAN+'[+] Packet may\'ve been split. Load data:',body+colors.ENDC
+					for x in username:
+						for u in x:
+							if '=' in u:
+								print colors.RED+u+colors.ENDC
+					for y in password:
+						for p in y:
+							if '=' in p:
+								print colors.RED+p+colors.ENDC
+			if not get:
+				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
+				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
+				if username != [] or password != []:
+					print colors.TAN+'[+] Packet may\'ve been split. Load data:',headers+colors.ENDC
+					for x in username:
+						for u in x:
+							if '=' in u:
+								print colors.RED+u+colors.ENDC
+					for y in password:
+						for p in y:
+							if '=' in p:
+								print colors.RED+p+colors.ENDC
 
 #			username = re.finditer('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
 #			password = re.finditer('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
@@ -180,21 +202,6 @@ def URL(pkt):
 #						print colors.TAN+'[+] Packet was split. Data:', headers+colors.ENDC
 #					print colors.RED+p.group()+colors.ENDC
 #			counter = 0
-
-		headLines = headers.split(r"\r\n")
-		for l in headLines:
-			searchHost = re.search('[Hh]ost: ', l)
-			searchGet = re.search('GET /', l)
-			searchPost = re.search('POST /', l)
-			if searchHost:
-				host = l.split(' ')
-				host = host[1]
-			if searchGet:
-				get = l.split(' ')
-				get = get[1]
-			if searchPost:
-				post = l.split(' ')
-				post = post[1]
 
 		if host and get:
 			url = host+get
