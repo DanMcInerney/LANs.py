@@ -5,4 +5,10 @@ Running just intercept.py without -ip argument will arp scan the network and giv
 
 Example:
 ./intercept.py -s -u -p -ip 192.168.0.10
+
 Would print URLs visited, username/passwords entered, POSTs made, and all searches they make
+
+For all options:
+
+./intercept.py -h 
+
