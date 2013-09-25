@@ -308,7 +308,8 @@ class Parser():
 		if dport == 26:
 			try:
 				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
-				b64decode = base64.b64decode(b64str)
+				b64decode = repr(base64.b64decode(b64str)).replace("'", "")
+				b64decode = b64decode.replace(r'\x00', ' ')
 				print R+'[!] Decoded:'+b64decode+W
 				if args.write:
 					logger.write('[!] Decoded: '+b64decode+'\n')
@@ -317,7 +318,8 @@ class Parser():
 		else:
 			try:
 				b64str = load.replace(r"\r\n", "")
-				b64decode = base64.b64decode(b64str)
+				b64decode = repr(base64.b64decode(b64str)).replace("'", "")
+				b64decode = b64decode.replace(r'\x00', ' ')
 				print R+'[!] Decoded:',b64decode+W
 				if args.write:
 					logger.write('[!] Decoded: '+b64decode+'\n')
