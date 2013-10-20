@@ -259,7 +259,7 @@ class Parser():
 					return
 				else:
 					self.Cookies.append(x)
-				print P+'[+] Cookie found for '+W+host+P,x.replace('Cookie: ', '')+W
+				print P+'[+] Cookie found for '+W+host+P+' logged in intercept.log.txt'+W
 				if args.write:
 					logger.write('[+] Cookie found for'+host+':'+x.replace('Cookie: ', '')+'\n')
 
