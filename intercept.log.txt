@@ -1,6 +1,0 @@
-[+] IRC msg to ##linux:love
-[+] IRC msg to #dc801:hmm
-[!] POP user and pass found: AHRlbGxAaGFja2FuZHRlbGwudXMAamFtdGhyb3c4NzY=\r\n
-[!] Decoded: tell@hackandtell.us jamthrow876
-[+] IRC msg to #python:sh?
-[+] IRC msg to #python:::
