@@ -52,3 +52,5 @@ To do:
   integrate this project with wifite?
 
   use twisted so we can use nfqueue as pkt input
+
+  add ability to read from pcap
