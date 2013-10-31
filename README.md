@@ -3,6 +3,8 @@ intercept
 
 Individually arpspoofs the target box, router and DNS server if necessary. Displays all most the interesting bits of their traffic. Cleans up after itself. 
 
+Prereqs: Linux, scapy, python nfqueue-bindings, aircrack-ng, python twisted
+
 Example usage as root:
 python intercept.py -u -p -d -ip 192.168.0.10
 
