@@ -40,11 +40,11 @@ from cStringIO import StringIO
 
 #Create the arguments
 parser = argparse.ArgumentParser()
+parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage: -b http://192.168.0.3:3000/hook.js")
+parser.add_argument("-c", "--code", help="Inject arbitrary html. Example usage (include quotes): -c '<title>New title</title>'")
 parser.add_argument("-u", "--urlspy", help="Show all URLs and search terms the victim visits or enters minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets. Usage: -ip <victim IP>")
 parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage: -b http://192.168.0.3:3000/hook.js")
-parser.add_argument("-c", "--code", help="Inject arbitrary html. Example usage (include quotes): -c '<title>New title</title>'")
 parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
 parser.add_argument("-set", "--setoolkit", help="Start Social Engineer's Toolkit in another window.", action="store_true")
@@ -52,9 +52,7 @@ parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/
 parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
 parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
 parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
-###########################################
 parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
-###########################################
 args = parser.parse_args()
 
 #Console colors
@@ -994,6 +992,7 @@ def main():
 		for x in nmap:
 			print '[+]',x
 			logger.write('[+] '+x+'\n')
+
 	print ''
 
 	# Cleans up if Ctrl-C is caught
