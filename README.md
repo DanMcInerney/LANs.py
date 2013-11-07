@@ -6,7 +6,7 @@ Multithreaded asynchronous packet parsing/injecting arp spoofer.
 Individually arpspoofs the target box, router and DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
 
-Prereqs: Linux, scapy, python nfqueue-bindings, aircrack-ng, python twisted, BeEF (optional), wireless card capable of injection
+Prereqs: Linux, scapy, python nfqueue-bindings, aircrack-ng, python twisted, BeEF (optional), and a wireless card capable of promiscuous mode if you don't use the -ip option
 
 Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
@@ -18,7 +18,7 @@ Simplest usage:
 python LANs.py
 ```
 
-Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and tell you the clients on the network that are sending the most packets, give Windows netbios names, then you can Ctrl-C and pick your target which it will then ARP spoof. Simple ARP spoofing. 
+Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and list all the clients on the nextwork including their Windows netbios names along with how many data packets they're sending. so you can immediately target the active ones. The ability to capture data packets they send is very dependant on physical proximity and the power of your network card. then you can Ctrl-C and pick your target which it will then ARP spoof. Simple target identification and ARP spoofing. 
 
 Passive harvesting usage:
 
