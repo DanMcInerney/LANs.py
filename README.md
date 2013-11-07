@@ -30,7 +30,7 @@ python LANs.py -u -d -p -ip 192.168.0.10
 
 -d: open an xterm with driftnet to see all images they view
 
--p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
+-p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received; will also decode base64 if the email authentication is encrypted with it
 
 -ip: target this IP address 
 
