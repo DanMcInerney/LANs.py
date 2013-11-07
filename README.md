@@ -59,7 +59,7 @@ Read from pcap:
 python LANs.py -pcap libpcapfilename -ip 192.168.0.10
 ```
 
-To read from a pcap file you must include the target's IP address with the -ip option. It must also be in libpcap form which is the most common anyway.
+To read from a pcap file you must include the target's IP address with the -ip option. It must also be in libpcap form which is the most common anyway. One advantage of reading from a pcap file is that you do not need to be root to execute the script. 
 
 
 Aggressive usage:
