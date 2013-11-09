@@ -797,7 +797,7 @@ class active_users():
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
 			self.monmode = monmodeSearch.group(1)
-		except OSError, e:
+		except:
 			exit('[-] Enabling monitor mode failed, do you have aircrack-ng installed?')
 
 		sniff(iface=self.monmode, prn=self.pkt_cb, store=0)
