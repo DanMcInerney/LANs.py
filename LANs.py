@@ -804,7 +804,7 @@ class active_users():
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
 			self.monmode = monmodeSearch.group(1)
-		except OSError, e:
+		except:
 			exit('[-] Enabling monitor mode failed, do you have aircrack-ng installed?')
 
 		sniff(iface=self.monmode, prn=self.pkt_cb, store=0)
@@ -823,12 +823,15 @@ def print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(victimMAC):
-	ipfwd = Popen(['/bin/cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
-	if ipfwd.communicate()[0] != '1\n':
-		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+#	ipfwd = Popen(['/bin/cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
+#	if ipfwd.communicate()[0] != '1\n':
+
+	ipf = open('/proc/sys/net/ipv4/ip_forward', 'rw+')
+	ipfread = ipf.read()
+	if '0' in ipfread:
 		ipf.write('1\n')
 		ipf.close()
-		print '[*] Enabled IP forwarding'
+	print '[*] Enabled IP forwarding'
 	os.system('/sbin/iptables -F')
 	os.system('/sbin/iptables -X')
 	os.system('/sbin/iptables -t nat -F')
@@ -915,6 +918,9 @@ def main():
 	#Find the gateway and interface
 	ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
 	ipr = ipr.communicate()[0]
+	iprs = ipr.split('\n')
+	for route in range(1,len(iprs)):
+	    iprs[route]=iprs[route].split()
 	ipr = repr(ipr).split(' ')
 	if args.routerip:
 		routerIP = args.routerip
@@ -925,7 +931,11 @@ def main():
 		interface = args.interface
 	else:
 		interface = ipr[4]
-
+        for ip in iprs:
+	    for i in ip:
+	        if i == interface:
+		    IPprefix=ip[0]
+		    break
 	if args.ipaddress:
 		victimIP = args.ipaddress
 	else:
