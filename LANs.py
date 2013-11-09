@@ -344,12 +344,12 @@ class Parser():
 				pass
 			else:
 				searched = searched.replace('+', ' ').replace('%20', ' ').replace('%3F', '?').replace('%27', '\'').replace('%40', '@').replace('%24', '$').replace('%3A', ':').replace('%3D', '=').replace('%22', '\"').replace('%24', '$')
-				print T+'[+] Searched '+W+host+T+': '+searched+W
+				print(T+'[+] Searched '+W+host+T+': '+searched+W)
 				logger.write('[+] Searched '+host+ ' for: '+searched+'\n')
 
 	def post_parser(self, url, body, host, header_lines):
 		if 'ocsp' in url:
-			print B+'[+] POST: '+W+url
+			print(B+'[+] POST: '+W+url)
 			logger.write('[+] POST: '+url+'\n')
 		elif body != '':
 			try:
@@ -988,12 +988,12 @@ def main():
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[3:-4]
 		except:
-			print '[-] Nmap port and OS scan failed, is it installed?'
+			print('[-] Nmap port and OS scan failed, is it installed?')
 		for x in nmap:
-			print '[+]',x
+			print('[+]',x)
 			logger.write('[+] '+x+'\n')
 
-	print ''
+	print('')
 
 	# Cleans up if Ctrl-C is caught
 	def signal_handler(signal, frame):
