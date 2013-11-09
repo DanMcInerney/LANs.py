@@ -742,24 +742,30 @@ class active_users():
 		iplist = []
 		maclist = []
 		try:
-			nmap = Popen(['/usr/bin/nmap', '-sn', IPprefix], stdout=PIPE, stderr=DN)
+			nmap = Popen(['/usr/bin/nmap', '-sn', '192.168.1.*'], stdout=PIPE, stderr=DN)
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[2:-1]
 		except:
 			print '[-] Nmap ARP scan failed, is it nmap installed?'
 		for x in nmap:
+			#print x;
 			if 'Nmap' in x:
-				nmapip = x.split()[4]
+				pieces = x.split()
+				nmapip = pieces[len(pieces)-1]
+				nmapip = nmapip.replace('(','').replace(')','')
+				print "adding nmapip:" + nmapip
 				iplist.append(nmapip)
 			if 'MAC' in x:
 				nmapmac = x.split()[2]
 				maclist.append(nmapmac)
 		zipped = zip(iplist, maclist)
 		self.IPandMAC = [list(item) for item in zipped]
-
+		
+		print routerIP;
 		# Make sure router is caught in the arp ping
 		r = 0
 		for i in self.IPandMAC:
+			print i;
 			i.append(0)
 			if r == 0:
 				if routerIP == i[0]:
@@ -793,6 +799,7 @@ class active_users():
 		# Start monitor mode
 		print '[*] Enabling monitor mode'
 		try:
+			print '/usr/sbin/airmon-ng ' + 'start ' + '%s ' + interface
 			promiscSearch = Popen(['/usr/sbin/airmon-ng', 'start', '%s' % interface], stdout=PIPE, stderr=DN)
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
