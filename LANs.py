@@ -911,6 +911,9 @@ def main():
 	#Find the gateway and interface
 	ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
 	ipr = ipr.communicate()[0]
+	iprs = ipr.split('\n')
+	for route in range(1,len(iprs)):
+	    iprs[route]=iprs[route].split()
 	ipr = repr(ipr).split(' ')
 	if args.routerip:
 		routerIP = args.routerip
@@ -921,7 +924,11 @@ def main():
 		interface = args.interface
 	else:
 		interface = ipr[4]
-
+        for ip in iprs:
+	    for i in ip:
+	        if i == interface:
+		    IPprefix=ip[0]
+		    break
 	if args.ipaddress:
 		victimIP = args.ipaddress
 	else:
