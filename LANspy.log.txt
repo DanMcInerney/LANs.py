@@ -1,0 +1,18 @@
+[*] Router IP: 10.0.0.1
+[*] victim IP: 10.0.0.8
+[*] Router MAC: cc:35:40:41:49:30
+[*] Victim MAC: 00:13:02:a6:8f:12
+[+] Starting Nmap 6.40 ( http://nmap.org ) at 2013-11-09 00:13 MST
+[+] Nmap scan report for 10.0.0.8
+[+] Host is up (0.086s latency).
+[+] Not shown: 999 closed ports
+[+] PORT   STATE SERVICE
+[+] 80/tcp open  http
+[+] MAC Address: 00:13:02:A6:8F:12 (Intel Corporate)
+[+] Device type: general purpose
+[+] Running: Linux 2.6.X|3.X
+[+] OS CPE: cpe:/o:linux:linux_kernel:2.6 cpe:/o:linux:linux_kernel:3
+[+] OS details: Linux 2.6.32 - 3.9
+[+] Network Distance: 1 hop
+[+] OS detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+[+] Nmap done: 1 IP address (1 host up) scanned in 6.18 seconds

