@@ -816,12 +816,15 @@ def print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(victimMAC):
-	ipfwd = Popen(['/bin/cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
-	if ipfwd.communicate()[0] != '1\n':
-		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
+#	ipfwd = Popen(['/bin/cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
+#	if ipfwd.communicate()[0] != '1\n':
+
+	ipf = open('/proc/sys/net/ipv4/ip_forward', 'rw+')
+	ipfread = ipf.read()
+	if '0' in ipfread:
 		ipf.write('1\n')
 		ipf.close()
-		print '[*] Enabled IP forwarding'
+	print '[*] Enabled IP forwarding'
 	os.system('/sbin/iptables -F')
 	os.system('/sbin/iptables -X')
 	os.system('/sbin/iptables -t nat -F')
