@@ -50,7 +50,7 @@ Inject a BeEF hook URL (http://beefproject.com/, tutorial: http://resources.info
 python LANs.py -c '<title>Owned.</title>'
 ```
 
-Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first <head> and failing that injects prior to the first </head>. This example will change the page title to 'Owned.'
+Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first `<head>` and failing that injects prior to the first `</head>`. This example will change the page title to 'Owned.'
 
 
 Read from pcap:
