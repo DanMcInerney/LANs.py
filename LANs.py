@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python2
 '''
-Description:	MITMs a LAN victim and prints all the interesting unencrypted info like passwords and messages. Asynchronous multithreaded arp spoofing packet parser.
+Description:	ARP poisons a LAN victim and prints all the interesting unencrypted info like usernames, passwords and messages. Asynchronous multithreaded arp spoofing packet parser.
 Prerequisites:	Linux
 					nmap (optional)
 					nbtscan (optional)
@@ -760,7 +760,7 @@ class active_users():
 				maclist.append(nmapmac)
 		zipped = zip(iplist, maclist)
 		self.IPandMAC = [list(item) for item in zipped]
-		
+
 		print routerIP;
 		# Make sure router is caught in the arp ping
 		r = 0

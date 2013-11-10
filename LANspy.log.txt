@@ -1,0 +1,11 @@
+[*] Router IP: 10.0.0.1
+[*] victim IP: 10.0.0.8
+[*] Router MAC: cc:35:40:41:49:30
+[*] Victim MAC: 00:13:02:a6:8f:12
+[*] www.neopets.com/
+[*] www.neopets.com/
+[*] www.neopets.com/
+[*] www.neopets.com/
+[*] www.neopets.com/
+[*] www.neopets.com/
+[*] www.facebook.com/plugins/like.php?api_key=&channel_url=http%3A%2F%2Fstatic.ak.facebook.com%2Fconnect%2Fxd_arbiter.php%3Fversion%3D28%23cb%3Df24a0
