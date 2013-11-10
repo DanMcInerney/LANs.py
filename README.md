@@ -95,6 +95,10 @@ python LANs.py -h
 
 -pcap PCAP_FILE: parse through all the packets in a pcap file; requires the -ip [target's IP address] argument
 
+-rmac ROUTER_MAC: enter router MAC here if you're having trouble getting the script to automatically fetch it
+
+-rip ROUTER_IP: enter router IP here if you're having trouble getting the script to automatically fetch it
+
 -v: show verbose URLs which do not truncate at 150 characters like -u
 
 

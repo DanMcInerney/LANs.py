@@ -6,7 +6,7 @@ Prerequisites:	Linux
 					nbtscan (optional)
 					aircrack-ng
 				Python 2.6+
-					nfqueue-bindings
+					nfqueue-bindings 0.4-3
 					scapy
 					twisted
 
