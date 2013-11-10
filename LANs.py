@@ -823,14 +823,7 @@ def print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(victimMAC):
-#	ipfwd = Popen(['/bin/cat', '/proc/sys/net/ipv4/ip_forward'], stdout=PIPE, stderr=DN)
-#	if ipfwd.communicate()[0] != '1\n':
-
-	ipf = open('/proc/sys/net/ipv4/ip_forward', 'rw+')
-	ipfread = ipf.read()
-	if '0' in ipfread:
-		ipf.write('1\n')
-		ipf.close()
+	open('/proc/sys/net/ipv4/ip_forward', 'w').write('1\n')
 	print '[*] Enabled IP forwarding'
 	os.system('/sbin/iptables -F')
 	os.system('/sbin/iptables -X')
@@ -1044,9 +1037,7 @@ def main():
 	def signal_handler(signal, frame):
 		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
 		logger.close()
-		ipf = open('/proc/sys/net/ipv4/ip_forward', 'r+')
-		ipf.write('0\n')
-		ipf.close()
+		open('/proc/sys/net/ipv4/ip_forward', 'w').write('0\n')
 		if not dnsIP == routerIP and dnsMAC:
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
