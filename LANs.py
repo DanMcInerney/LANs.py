@@ -748,12 +748,10 @@ class active_users():
 		except:
 			print '[-] Nmap ARP scan failed, is it nmap installed?'
 		for x in nmap:
-			#print x;
 			if 'Nmap' in x:
 				pieces = x.split()
 				nmapip = pieces[len(pieces)-1]
 				nmapip = nmapip.replace('(','').replace(')','')
-				print "adding nmapip:" + nmapip
 				iplist.append(nmapip)
 			if 'MAC' in x:
 				nmapmac = x.split()[2]
@@ -761,11 +759,9 @@ class active_users():
 		zipped = zip(iplist, maclist)
 		self.IPandMAC = [list(item) for item in zipped]
 
-		print routerIP;
 		# Make sure router is caught in the arp ping
 		r = 0
 		for i in self.IPandMAC:
-			print i;
 			i.append(0)
 			if r == 0:
 				if routerIP == i[0]:
