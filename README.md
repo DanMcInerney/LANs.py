@@ -18,7 +18,7 @@ Simplest usage:
 python LANs.py
 ```
 
-Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and list all the clients on the nextwork including their Windows netbios names along with how many data packets they're sending. so you can immediately target the active ones. The ability to capture data packets they send is very dependant on physical proximity and the power of your network card. then you can Ctrl-C and pick your target which it will then ARP spoof. Simple target identification and ARP spoofing. 
+Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and list all the clients on the nextwork including their Windows netbios names along with how many data packets they're sending. so you can immediately target the active ones. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. then you can Ctrl-C and pick your target which it will then ARP spoof. Simple target identification and ARP spoofing. 
 
 Passive harvesting usage:
 
@@ -75,7 +75,7 @@ python LANs.py -h
 
 -b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
 
--c 'HTML CODE': inject arbitrary html code into pages the victim vists; include the quotes when selecting HTML to inject
+-c 'HTML CODE': inject arbitrary html code into pages the victim visits; include the quotes when selecting HTML to inject
 
 -d: open an xterm with driftnet to see all images they view
 
