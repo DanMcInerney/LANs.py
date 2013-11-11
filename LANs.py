@@ -742,7 +742,7 @@ class active_users():
 		iplist = []
 		maclist = []
 		try:
-			nmap = Popen(['/usr/bin/nmap', '-sn', '192.168.1.*'], stdout=PIPE, stderr=DN)
+			nmap = Popen(['/usr/bin/nmap', '-sn', '-n', '192.168.1.*'], stdout=PIPE, stderr=DN)
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[2:-1]
 		except:
