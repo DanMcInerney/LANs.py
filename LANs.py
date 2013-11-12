@@ -699,9 +699,9 @@ class Parser():
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
-	def __init__(self):
+	def __init__(self, args):
 		self.q = nfqueue.queue()
-		self.q.set_callback(Parser().start)
+		self.q.set_callback(Parser(args).start)
 		self.q.fast_open(0, socket.AF_INET)
 		self.q.set_queue_maxlen(5000)
 		reactor.addReader(self)
@@ -898,7 +898,7 @@ def pcap_handler(args):
 			victimIP = args.ipaddress
 			pcap = rdpcap(args.pcap)
 			for payload in pcap:
-				Parser().start(payload)
+				Parser(args).start(payload)
 			sys.exit('[-] Finished parsing pcap file')
 		else:
 			sys.exit('[-] Please include the following arguement when reading from a pcap file: -ip [target\'s IP address]')
@@ -1025,7 +1025,7 @@ def main(args):
 		dnsMAC = routerMAC
 
 	setup(victimMAC)
-	Queued()
+	Queued(args)
 	threads(args)
 
 	if args.nmap:
