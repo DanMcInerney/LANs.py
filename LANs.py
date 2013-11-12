@@ -13,7 +13,7 @@ Prerequisites:	Linux
 Note: 			This script flushes iptables before and after usage.
 '''
 __author__ = 'Dan McInerney'
-__license__ = 'GPL'
+__license__ = 'BSD'
 __contact__ = 'danhmcinerney with gmail'
 __version__ = 1.0
 
