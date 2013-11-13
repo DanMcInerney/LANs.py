@@ -795,7 +795,7 @@ class active_users():
 		# Start monitor mode
 		print '[*] Enabling monitor mode'
 		try:
-			print '/usr/sbin/airmon-ng ' + 'start ' + '%s ' + interface
+			print '/usr/sbin/airmon-ng ' + 'start ' + interface
 			promiscSearch = Popen(['/usr/sbin/airmon-ng', 'start', '%s' % interface], stdout=PIPE, stderr=DN)
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
