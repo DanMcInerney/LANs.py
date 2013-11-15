@@ -33,7 +33,14 @@ from subprocess import *
 from twisted.internet import reactor
 from twisted.internet.interfaces import IReadDescriptor
 from twisted.internet.protocol import Protocol, Factory
-import nfqueue
+try:
+	import nfqueue
+except:
+	nfq = raw_input('[-] python-nfqueue not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
+	if nfq == 'y':
+		os.system('apt-get install -y python-nfqueue')
+	else:
+		exit('[-] Exiting due to missing dependency')
 from zlib import decompressobj, decompress
 import gzip
 from cStringIO import StringIO
@@ -793,9 +800,8 @@ class active_users():
 						a.append(nbtname)
 
 		# Start monitor mode
-		print '[*] Enabling monitor mode'
+		print '[*] Enabling monitor mode [/usr/sbin/airmon-ng ' + 'start ' + interface + ']'
 		try:
-			print '/usr/sbin/airmon-ng ' + 'start ' + interface
 			promiscSearch = Popen(['/usr/sbin/airmon-ng', 'start', '%s' % interface], stdout=PIPE, stderr=DN)
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
@@ -920,11 +926,8 @@ def main():
 		interface = args.interface
 	else:
 		interface = ipr[4]
-        for ip in iprs:
-	    for i in ip:
-	        if i == interface:
-		    IPprefix=ip[0]
-		    break
+	if 'eth' in interface or 'p3p' in interface:
+		exit('[-] Wired interface found as default route, please connect wirelessly and retry or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
 	if args.ipaddress:
 		victimIP = args.ipaddress
 	else:
