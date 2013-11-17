@@ -1,1 +1,0 @@
-# Nmap 6.40 scan initiated Sun Nov 17 12:36:53 2013 as: nmap -e wlan0 -T4 -A -v -Pn -oN 192.168.207.224.nmap.txt 192.168.207.224
