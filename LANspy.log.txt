@@ -1,0 +1,19 @@
+[*] Router IP: 192.168.207.1
+[*] victim IP: 192.168.207.224
+[*] Router MAC: c0:ea:e4:22:d3:74
+[*] Victim MAC: ec:35:86:b5:96:fe
+[+] Starting Nmap 6.40 ( http://nmap.org ) at 2013-11-17 12:38 MST
+[+] Warning: 192.168.207.224 giving up on port because retransmission cap hit (6).
+[+] Nmap scan report for 192.168.207.224
+[+] Host is up (0.0091s latency).
+[+] Not shown: 870 closed ports, 129 filtered ports
+[+] PORT      STATE SERVICE
+[+] 62078/tcp open  iphone-sync
+[+] MAC Address: EC:35:86:B5:96:FE (Apple`)
+[+] Device type: media device|phone
+[+] Running: Apple iOS 4.X|5.X|6.X
+[+] OS CPE: cpe:/o:apple:iphone_os:4 cpe:/a:apple:apple_tv:4 cpe:/o:apple:iphone_os:5 cpe:/o:apple:iphone_os:6
+[+] OS details: Apple Mac OS X 10.8.0 - 10.8.3 (Mountain Lion) or iOS 4.4.2 - 6.1.3 (Darwin 11.0.0 - 12.3.0)
+[+] Network Distance: 1 hop
+[+] OS detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+[+] Nmap done: 1 IP address (1 host up) scanned in 135.87 seconds

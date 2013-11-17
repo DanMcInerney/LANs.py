@@ -864,9 +864,9 @@ def threads():
 				print '[-] Could not open SEToolkit, is it installed? Continuing as normal without it.'
 
 	if args.nmapaggressive:
-		print '[*] Starting '+R+'aggressive scan [nmap -T4 -A -v -Pn -oN '+victimIP+']'+W+' in background; results will be in a file '+victimIP+'.nmap.txt'
+		print '[*] Starting '+R+'aggressive scan [nmap -e '+interface+' -T4 -A -v -Pn -oN '+victimIP+']'+W+' in background; results will be in a file '+victimIP+'.nmap.txt'
 		try:
-			n = Thread(target=os.system, args=('nmap -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
+			n = Thread(target=os.system, args=('nmap -e '+interface+' -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
 			n.daemon = True
 			n.start()
 		except:
@@ -1023,9 +1023,10 @@ def main():
 	threads()
 
 	if args.nmap:
-		print "\n[*] Running [nmap -T4 -O "+victimIP+"]"
+		print "\n[*] Running [nmap -T4 -O "+victimIP+"] this may take several minutes..."
 		try:
 			nmap = Popen(['/usr/bin/nmap', '-T4', '-O', '-e', interface, victimIP], stdout=PIPE, stderr=DN)
+			nmap.wait()
 			nmap = nmap.communicate()[0].splitlines()
 			for x in nmap:
 				if x != '':
