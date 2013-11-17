@@ -914,14 +914,14 @@ def main():
 	ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
 	ipr = ipr.communicate()[0]
 	iprs = ipr.split('\n')
-	for route in range(1,len(iprs)):
-	    iprs[route]=iprs[route].split()
-	ipr = repr(ipr).split(' ')
+	ipr = ipr.split()
 	if args.routerip:
 		routerIP = args.routerip
 	else:
 		routerIP = ipr[2]
-	IPprefix = ipr[8][2:]
+	for r in iprs:
+		if '/' in r:
+			IPprefix = r.split()[0]
 	if args.interface:
 		interface = args.interface
 	else:
