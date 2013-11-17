@@ -122,7 +122,6 @@ This script uses a python nfqueue-bindings queue wrapped in a Twisted IReadDescr
 
 Injecting code undetected is a dicey game, if a minor thing goes wrong or the server the victim is requesting data from performs things in unique or rare way then the user won't be able to open the page they're trying to view and they'll know something's up. This script is designed to forward packets if anything fails so during usage you may see lots of "[!] Injected packet for www.domain.com" but only see one or two domains on the BEeF panel that the browser is hooked on. This is OK. If they don't get hooked on the first page just wait for them to browse a few other pages. The goal is to be unnoticeable. My favorite BEeF tools are in Commands > Social Engineering. Do things like create an official looking Facebook pop up saying the user's authentication expired and to re-enter their credentials.
 
-#####################
 NOTE TO UBUNTU USERS:
 You will need to update your nfqueue-bindings to the latest version (0.4.3 as time of writing) or you will have to edit the Parser.start() (around line 114) function to say:
 
@@ -130,8 +129,8 @@ def start(self, i, payload):
 
 
 
-
-Copyright (c) <year>, <copyright holder>
+########################################
+Copyright (c) 2013, Dan McInerney
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -150,4 +149,3 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
