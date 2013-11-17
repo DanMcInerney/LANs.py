@@ -6,11 +6,13 @@ Multithreaded asynchronous packet parsing/injecting arp spoofer.
 Individually arpspoofs the target box, router and DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
 
-Prereqs: Linux, scapy, python nfqueue-bindings 0.4.3+, aircrack-ng, python twisted, BeEF (optional), and a wireless card capable of promiscuous mode if you don't use the -ip option
+Prereqs: Linux, scapy, python nfqueue-bindings 0.4.3+, aircrack-ng, python twisted, BeEF (optional), and a wireless card capable of promiscuous mode if you choose not to use the -ip option
 
 Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
 
+Full usaage: LANs.py [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d] [-v] [-dns DNSSPOOF] [-set] [-p] [-na] [-n] [-i INTERFACE] [-rip ROUTERIP] [-rmac ROUTERMAC] [-pcap PCAP]
+							  
 
 Simplest usage:
 
