@@ -730,22 +730,23 @@ class active_users():
 			if self.current_time > self.start_time+1:
 				self.IPandMAC.sort(key=lambda x: float(x[2]), reverse=True) # sort by data packets
 				os.system('/usr/bin/clear')
-				print '    IP	        Data'
+				print '[*] '+T+'IP address'+W+' and '+R+'data packets'+W+' sent/received'
+				print '---------------------------------------------'
 				for x in self.IPandMAC:
 					if len(x) == 3:
-						ip = x[0].ljust(10)
-						data = str(x[2]).rjust(8)
-						print ip, data
+						ip = x[0].ljust(16)
+						data = str(x[2]).ljust(5)
+						print T+ip+W, R+data+W
 					else:
-						ip = x[0].ljust(10)
-						data = str(x[2]).rjust(8)
-						print ip, data, x[3]
+						ip = x[0].ljust(16)
+						data = str(x[2]).ljust(5)
+						print T+ip+W, R+data+W, x[3]
 				print '\n[*] Hit Ctrl-C at any time to stop and choose a victim IP'
 				self.start_time = time.time()
 
 	def users(self, IPprefix, routerIP):
 
-		print '[*] Running ARP scan to identify users on the network; this may take a minute...'
+		print '[*] Running ARP ping to identify users on the network; this may take a minute...'
 		iplist = []
 		maclist = []
 		try:
@@ -753,7 +754,7 @@ class active_users():
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[2:-1]
 		except:
-			print '[-] Nmap ARP scan failed, is it nmap installed?'
+			print '[-] Nmap ARP ping failed, is it nmap installed?'
 		for x in nmap:
 			if 'Nmap' in x:
 				pieces = x.split()
@@ -935,7 +936,10 @@ def main():
 		au.users(IPprefix, routerIP)
 		print '\n[*] Turning off monitor mode'
 		os.system('/usr/sbin/airmon-ng stop %s >/dev/null 2>&1' % au.monmode)
-		victimIP = raw_input('[*] Enter the non-router IP to spoof: ')
+		try:
+			victimIP = raw_input('[*] Enter the non-router IP to spoof: ')
+		except KeyboardInterrupt:
+			exit('\n[-] Quitting')
 
 	print "[*] Checking the DHCP and DNS server addresses..."
 	# DHCP is a pain in the ass to craft
