@@ -22,7 +22,7 @@ LANs.py [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d]
 Usage
 -----
 
-### Simplest usage:
+### Simplest usage (including active user targeting):
 
 ``` shell
 python LANs.py
