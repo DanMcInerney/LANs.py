@@ -48,7 +48,7 @@ from cStringIO import StringIO
 def parse_args():
 	#Create the arguments
 	parser = argparse.ArgumentParser()
-	
+
 	parser.add_argument("-b", "--beef", help="Inject a BeEF hook URL. Example usage: -b http://192.168.0.3:3000/hook.js")
 	parser.add_argument("-c", "--code", help="Inject arbitrary html. Example usage (include quotes): -c '<title>New title</title>'")
 	parser.add_argument("-u", "--urlspy", help="Show all URLs and search terms the victim visits or enters minus URLs that end in .jpg, .png, .gif, .css, and .js to make the output much friendlier. Also truncates URLs at 150 characters. Use -v to print all URLs and without truncation.", action="store_true")
@@ -65,7 +65,7 @@ def parse_args():
 	parser.add_argument("-rip", "--routerip", help="Set the router IP; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
 	parser.add_argument("-rmac", "--routermac", help="Set the router MAC; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
 	parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
-	
+
 	return parser.parse_args()
 
 #Console colors
@@ -803,7 +803,7 @@ class active_users():
 				print '[-] Could not find any netbios names. Continuing without them'
 			if nbtip and nbtname:
 				for a in self.IPandMAC:
-					if nbtip in a[0]:
+					if nbtip == a[0]:
 						a.append(nbtname)
 
 		# Start monitor mode
