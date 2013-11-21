@@ -960,7 +960,7 @@ def main(args):
 				chr(DHCPRevOptions["server_id"][0]),
 				chr(DHCPRevOptions["name_server"][0]),
 				), "end"]))
-	ans, unans = srp(dhcp, timeout=6, retry=1)
+	ans, unans = srp(dhcp, timeout=5, retry=1)
 	if ans:
 		for s,r in ans:
 			DHCPopt = r[0][DHCP].options

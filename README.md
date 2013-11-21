@@ -1,9 +1,9 @@
 LANs.py
 ========
 
-Multithreaded asynchronous packet parsing/injecting arp spoofer.
+Multithreaded asynchronous packet parsing/injecting ARP poisoner.
 
-Individually arpspoofs the target box, router and DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
+Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
 
 Prereqs: Linux, scapy, python nfqueue-bindings 0.4.3+, aircrack-ng, python twisted, BeEF (optional), and a wireless card capable of promiscuous mode if you choose not to use the -ip option
@@ -28,9 +28,9 @@ Usage
 python LANs.py
 ```
 
-Because there's no -ip option this will arp scan the network, compare it to a live running promiscuous capture, and list all the clients on the network including their Windows netbios names along with how many data packets they're sending. so you can immediately target the active ones. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. then you can Ctrl-C and pick your target which it will then ARP spoof. Simple target identification and ARP spoofing.
+Because there's no -ip option this will ARP scan the network, compare it to a live running promiscuous capture, and list all the clients on the network including their Windows netbios names along with how many data packets they're sending. so you can immediately target the active ones. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. then you can Ctrl-C and pick your target which it will then ARP spoof. Simple target identification and ARP spoofing.
 
-### Passive harvesting usage:
+### Passive harvesting:
 
 ``` shell
 python LANs.py -u -d -p -ip 192.168.0.10
@@ -114,14 +114,15 @@ python LANs.py -h
 
 
 
+### Clean up
 
-Cleans the following on Ctrl-C:
+Upon receiving a Ctrl-C:
 
---Turn off IP forwarding
+-Turns off IP forwarding
 
---Flush iptables firewall
+-Flushes iptables firewall
 
---Individually restore each machine's ARP table
+-Individually restores the router and victim's ARP tables
 
 
 
@@ -133,7 +134,7 @@ This script uses a python nfqueue-bindings queue wrapped in a Twisted IReadDescr
 Injecting code undetected is a dicey game, if a minor thing goes wrong or the server the victim is requesting data from performs things in unique or rare way then the user won't be able to open the page they're trying to view and they'll know something's up. This script is designed to forward packets if anything fails so during usage you may see lots of "[!] Injected packet for www.domain.com" but only see one or two domains on the BEeF panel that the browser is hooked on. This is OK. If they don't get hooked on the first page just wait for them to browse a few other pages. The goal is to be unnoticeable. My favorite BEeF tools are in Commands > Social Engineering. Do things like create an official looking Facebook pop up saying the user's authentication expired and to re-enter their credentials.
 
 NOTE TO UBUNTU USERS:
-You will need to update your nfqueue-bindings to the latest version (0.4.3 as time of writing) or you will have to edit the Parser.start() (around line 114) function to say:
+You will need to update your nfqueue-bindings to the latest version (0.4.3 as time of writing) or you will have to edit the Parser.start() (line 127) function to say:
 
 def start(self, i, payload):
 
@@ -141,7 +142,6 @@ def start(self, i, payload):
 License
 -------
 
-########################################
 Copyright (c) 2013, Dan McInerney
 All rights reserved.
 
