@@ -779,7 +779,7 @@ class active_users():
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[2:-1]
 		except:
-			print '[-] Nmap ARP ping failed, is it nmap installed?'
+			print '[-] Nmap ARP ping failed, is nmap installed?'
 		for x in nmap:
 			if 'Nmap' in x:
 				pieces = x.split()
