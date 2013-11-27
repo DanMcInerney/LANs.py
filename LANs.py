@@ -1047,7 +1047,6 @@ def main():
             for x in DHCPopt:
                 if 'domain' in x:
                     local_domain = x[1]
-                    pass
                 else:
                     local_domain = 'None'
             
