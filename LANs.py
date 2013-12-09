@@ -236,9 +236,9 @@ class Parser():
 				body = r.text.encode('utf-8')
 			except:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
-			debugger = open('/home/user/projects/origBody', 'w')
-			debugger.write(body)
-			debugger.close()
+#			debugger = open('...', 'w')
+#			debugger.write(body)
+#			debugger.close()
 
 			# INJECT
 			if self.args.beef:
