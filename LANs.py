@@ -23,6 +23,7 @@ __license__ = 'BSD'
 __contact__ = 'danhmcinerney with gmail'
 __version__ = 1.0
 
+import os
 try:
 	import nfqueue
 except Exception:
