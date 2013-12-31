@@ -41,7 +41,6 @@ conf.checkIPaddr=0
 from sys import exit
 from threading import Thread
 import argparse
-from os import geteuid, devnull
 import signal
 from base64 import b64decode
 from subprocess import *
@@ -89,7 +88,7 @@ GR = '\033[37m' # gray
 T  = '\033[93m' # tan
 
 logger = open('LANspy.log.txt', 'w+')
-DN = open(devnull, 'w')
+DN = open(os.devnull, 'w')
 
 class Spoof():
 	def originalMAC(self, ip):
@@ -912,18 +911,18 @@ def pcap_handler(args):
 	bad_args = [args.dnsspoof, args.beef, args.code, args.nmap, args.nmapaggressive, args.driftnet, args.interface]
 	for x in bad_args:
 		if x:
-			sys.exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
+			exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
 	if args.pcap:
 		if args.ipaddress:
 			victimIP = args.ipaddress
 			pcap = rdpcap(args.pcap)
 			for payload in pcap:
 				Parser(args).start(payload)
-			sys.exit('[-] Finished parsing pcap file')
+			exit('[-] Finished parsing pcap file')
 		else:
-			sys.exit('[-] Please include the following arguement when reading from a pcap file: -ip [target\'s IP address]')
+			exit('[-] Please include the following arguement when reading from a pcap file: -ip [target\'s IP address]')
 	else:
-		sys.exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
+		exit('[-] When reading from pcap file you may only include the following arguments: -v, -u, -p, -pcap [pcap filename], and -ip [victim IP address]')
 
 # Main loop
 def main(args):
@@ -931,10 +930,10 @@ def main(args):
 
 	if args.pcap:
 		pcap_handler(args)
-		sys.exit('[-] Finished parsing pcap file')
+		exit('[-] Finished parsing pcap file')
 
 	#Check if root
-	if not geteuid()==0:
+	if not os.geteuid()==0:
 		exit("\nPlease run as root\n")
 
 	#Find the gateway and interface
@@ -1020,7 +1019,7 @@ def main(args):
 				print "[*] Router MAC: " + routerMAC
 				logger.write("[*] Router MAC: "+routerMAC+'\n')
 			except Exception:
-				sys.exit("[-] [arp -n] failed to give accurate router MAC address")
+				exit("[-] [arp -n] failed to give accurate router MAC address")
 
 	if args.victimmac:
 		victimMAC = args.victimmac
