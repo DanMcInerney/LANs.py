@@ -214,10 +214,11 @@ class Parser():
 			else:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
 				return
-			self.user_agent = "'"+self.get_user_agent(header_lines)+"'"
-			if not self.user_agent:
+			if not self.get_user_agent(header_lines):
 				# Most common user-agent on the internet
 				self.user_agent = "'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101 Safari/537.36'"
+			else:
+				self.user_agent = "'"+self.get_user_agent(header_lines)+"'"
 			payload.set_verdict(nfqueue.NF_ACCEPT)
 			return
 
