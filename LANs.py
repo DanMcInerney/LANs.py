@@ -1041,7 +1041,7 @@ def main(args):
 			print "[*] Router MAC: " + routerMAC
 			logger.write("[*] Router MAC: "+routerMAC+'\n')
 		except Exception:
-			ac = raw_input = "[-] Router did not respond to ARP request for MAC, attempt to pull the MAC from the ARP cache? [y/n] "
+			ac = raw_input("[-] Router did not respond to ARP request for MAC, attempt to pull the MAC from the ARP cache? [y/n] ")
 			if ac == 'y':
 				try:
 					print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
