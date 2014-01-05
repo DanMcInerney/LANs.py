@@ -12,50 +12,53 @@ Prerequisites:	Linux
 
 Note: 			This script flushes iptables before and after usage.
 
-To do:			Add karma MITM technique
+To do:			1. Rogue DHCP server
+				Refactor with lots of smaller functions
+				Mass wifi jammer
+				Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
+				Add karma MITM technique
 				Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
-				Add anticaching (just edit the headers)
-				Ability to add option which will add a delay, allowing user to modify HTML/email/irc/usernames and passwords on the fly (how much interest is there in this?)
+				Integrate with wifite
 
 '''
 __author__ = 'Dan McInerney'
 __license__ = 'BSD'
 __contact__ = 'danhmcinerney with gmail'
-__version__ = 1.0
+__version__ = 1.1
+
+
+def module_check(module):
+	'''
+	Just for debian-based systems like Kali
+	'''
+	print module
+	ri = raw_input('[-] python-%s not installed, would you like to install now? (apt-get install -y python-%s will be run if yes) [y/n]: ' % (module, module))
+	if ri == 'y':
+		os.system('apt-get install -y python-%s' % module)
+	else:
+		exit('[-] Exiting due to missing dependency')
 
 import os
 try:
 	import nfqueue
 except Exception:
-	nfq = raw_input('[-] python-nfqueue not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
-	if nfq == 'y':
-		os.system('apt-get install -y python-nfqueue')
-		import nfqueue
-	else:
-		exit('[-] Exiting due to missing dependency')
+	module_check('nfqueue')
+	import nfqueue
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 try:
 	from scapy.all import *
 except Exception:
-	scpy = raw_input('[-] python-scapy not installed, would you like to install now? (apt-get install -y python-nfqueue will be run if yes) [y/n]: ')
-	if scpy == 'y':
-		os.system('apt-get install -y python-scapy')
-		from scapy.all import *
-	else:
-		exit('[-] Exiting due to missing dependency')
+	module_check('scapy')
+	from scapy.all import *
 conf.verb=0
 #Below is necessary to receive a response to the DHCP packets because we're sending to 255.255.255.255 but receiving from the IP of the DHCP server
 conf.checkIPaddr=0
 try:
 	from twisted.internet import reactor
 except Exception:
-	twstd = raw_input('[-] python-twisted not installed, would you like to install now? (apt-get install -y python-twisted will be run if yes) [y/n]: ')
-	if twstd == 'y':
-		os.system('apt-get install -y python-twisted')
-		from twisted.internet import reactor
-	else:
-		exit('[-] Exiting due to missing dependency')
+	module_check('twisted')
+	from twisted.internet import reactor
 from twisted.internet.interfaces import IReadDescriptor
 from twisted.internet.protocol import Protocol, Factory
 from sys import exit
@@ -255,9 +258,6 @@ class Parser():
 				body = r.text.encode('utf-8')
 			except Exception:
 				payload.set_verdict(nfqueue.NF_ACCEPT)
-#			debugger = open('...', 'w')
-#			debugger.write(body)
-#			debugger.close()
 
 			# INJECT
 			if self.args.beef:
@@ -467,7 +467,8 @@ class Parser():
 					logger.write('[*] '+url+'\n')
 
 			# Print search terms
-			self.searches(url, host)
+			if self.args.post or self.args.urlspy:
+				self.searches(url, host)
 
 			#Print POST load and find cookies
 			if self.args.post and post:
