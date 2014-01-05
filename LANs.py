@@ -757,7 +757,7 @@ class Queued(object):
 	def fileno(self):
 		return self.q.get_fd()
 	def doRead(self):
-		self.q.process_pending(20)
+		self.q.process_pending(5)
 	def connectionLost(self, reason):
 		reactor.removeReader(self)
 	def logPrefix(self):
@@ -1064,6 +1064,7 @@ def main(args):
 			logger.write("[*] Victim MAC: "+victimMAC+'\n')
 		except Exception:
 			exit("[-] Could not get victim MAC address; try the -vmac [xx:xx:xx:xx:xx:xx] option if you know the victim's MAC address")
+
 	if dnsIP != routerIP:
 		if IPprefix in dnsIP:
 			try:
@@ -1071,9 +1072,10 @@ def main(args):
 				print "[*] DNS server MAC: " + dnsMAC
 			except Exception:
 				print "[-] Could not get DNS server MAC address; continuing"
-				dnsMAC = routerMAC
+				dnsMAC = None
 		else:
-			dnsMAC = routerMAC
+			dnsMAC = None
+
 
 	setup(victimMAC)
 	Queued(args)
