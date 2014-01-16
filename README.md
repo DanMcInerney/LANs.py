@@ -1,7 +1,7 @@
 LANs.py
 ========
 
-Multithreaded asynchronous packet parsing/injecting ARP poisoner.
+Spy on a WLAN user and/or inject arbitrary HTML into pages they visit. Technically: multithreaded asynchronous packet parsing/injecting ARP/DNS poisoner.
 
 Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 

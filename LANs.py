@@ -29,7 +29,7 @@ __version__ = 1.1
 
 def module_check(module):
 	'''
-	Just for debian-based systems like Kali
+	Just for debian-based systems like Kali and Ubuntu
 	'''
 	ri = raw_input('[-] python-%s not installed, would you like to install now? (apt-get install -y python-%s will be run if yes) [y/n]: ' % (module, module))
 	if ri == 'y':
