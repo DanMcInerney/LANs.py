@@ -1045,7 +1045,7 @@ def main(args):
                if routerIP in line:
                   routerMACguess = line.split()[2]
                   if len(routerMACguess) == 17:
-                     accr = raw_input("[+] Is "+R+routerMACguess+W+" the the accurate router MAC? [y/n]: ")
+                     accr = raw_input("[+] Is "+R+routerMACguess+W+" the accurate router MAC? [y/n]: ")
                      if accr == 'y':
                         routerMAC = routerMACguess
                         print "[*] Router MAC: "+routerMAC
