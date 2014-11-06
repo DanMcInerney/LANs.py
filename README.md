@@ -1,6 +1,8 @@
 LANs.py
 ========
 
+***** This script does what it's supposed to but the code is not clean or efficient and I don't feel like rewriting it. I would recommend checking out more fully-fledged tools like byt3bl33d3r's [MITMf](https://github.com/byt3bl33d3r/MITMf) for intercepting and modifying traffic on the fly plus a lot more *****
+
 Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. Technically: multithreaded asynchronous packet parsing/injecting ARP/DNS poisoner.
 
 Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
