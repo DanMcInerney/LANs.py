@@ -1,8 +1,6 @@
 LANs.py
 ========
 
-***** This script does what it's supposed to but the code is not clean or efficient and I don't feel like rewriting it. I would recommend checking out more fully-fledged tools like byt3bl33d3r's [MITMf](https://github.com/byt3bl33d3r/MITMf) for intercepting and modifying traffic on the fly plus a lot more *****
-
 Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. Technically: multithreaded asynchronous packet parsing/injecting ARP/DNS poisoner.
 
 Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
@@ -157,33 +155,6 @@ to:
 
 def start(self, i, payload)
 
-
-
-License
--------
-
-Copyright (c) 2013, Dan McInerney
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-* Neither the name of Dan McInerney nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
 ***
 * [danmcinerney.org](danmcinerney.org)
-* [![Flattr this](http://api.flattr.com/button/flattr-badge-large.png)](https://flattr.com/submit/auto?user_id=DanMcInerney&url=https://github.com/DanMcInerney/LANs.py&title=LANs.py&language=&tags=github&category=software) 
 * [![Analytics](https://ga-beacon.appspot.com/UA-46613304-2/LANs.py/README.md)](https://github.com/igrigorik/ga-beacon)
