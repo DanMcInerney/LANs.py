@@ -7,7 +7,7 @@ LANs.py
 * Also can be used to continuously jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine-tuned to allow jamming of everyone or even just one client. Cannot jam WiFi and spy simultaneously.
 
 
-Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you don't know the IP of your target. 
+Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, tcpdump, and a wireless card capable of promiscuous mode if you don't know the IP of your target. 
 
 Tested on Kali. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
