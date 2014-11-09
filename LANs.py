@@ -64,7 +64,6 @@ from twisted.internet.protocol import Protocol, Factory
 from sys import exit
 from threading import Thread, Lock
 import argparse
-import signal
 from base64 import b64decode
 from subprocess import *
 from zlib import decompressobj, decompress
