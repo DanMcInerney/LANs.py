@@ -166,17 +166,16 @@ def LANsMain(args):
     ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
     ipr = ipr.communicate()[0]
     iprs = ipr.split('\n')
-    ipr = ipr.split()
-    if args.routerip:
-        routerIP = args.routerip
-    else:
-        try:
-            routerIP = ipr[2]
-        except:
-            exit("You must be connected to the internet to use this.")
+    routerIP = None
     for r in iprs:
         if '/' in r:
             IPprefix = r.split()[0]
+        if r.startswith('default') and not args.routerip:
+            routerIP = r.split()[2]
+    if args.routerip:
+        routerIP = args.routerip
+    if not routerIP:
+        exit("You must be connected to the internet to use this.")
     if args.interface:
         interface = args.interface
     else:
