@@ -5,7 +5,7 @@ Prerequisites: Linux
                nmap (optional)
                nbtscan (optional)
                aircrack-ng
-            Python 2.6+
+               Python 2.6+
                nfqueue-bindings 0.4-3
                scapy
                twisted
@@ -13,12 +13,12 @@ Prerequisites: Linux
 Note:          This script flushes iptables before and after usage.
 
 To do:         1. Rogue DHCP server
-            Refactor with lots of smaller functions
-            Mass wifi jammer
-            Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
-            Add karma MITM technique
-            Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
-            Integrate with wifite
+               2. Refactor with lots of smaller functions
+               3. Mass wifi jammer
+               4. Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
+               5. Add karma MITM technique
+               6. Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
+               7. Integrate with wifite
 
 '''
 
