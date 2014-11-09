@@ -4,12 +4,12 @@ LANs.py
 * Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. 
     * Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
-* Also can be used to continuosly jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine tuned to allow jamming of everyone or even just one client. (Cannot jam WiFi and spy simultaneously) 
+* Also can be used to continuously jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine-tuned to allow jamming of everyone or even just one client. Cannot jam WiFi and spy simultaneously.
 
 
 Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you don't know the IP of your target. 
 
-Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
+Tested on Kali. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
 
 All options:

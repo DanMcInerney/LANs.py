@@ -166,24 +166,23 @@ def LANsMain(args):
     ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
     ipr = ipr.communicate()[0]
     iprs = ipr.split('\n')
-    ipr = ipr.split()
-    if args.routerip:
-        routerIP = args.routerip
-    else:
-        try:
-            routerIP = ipr[2]
-        except:
-            exit("You must be connected to the internet to use this.")
+    routerIP = None
     for r in iprs:
         if '/' in r:
             IPprefix = r.split()[0]
+        if r.startswith('default'):
+            if not args.interface:
+                interface = r.split()[4]
+            if not args.routerip:
+                routerIP = r.split()[2]
+    if args.routerip:
+        routerIP = args.routerip
+    if not routerIP:
+        exit("[-] You must be connected to the internet to use this.")
     if args.interface:
         interface = args.interface
-    else:
-        interface = ipr[4]
     if 'eth' in interface or 'p3p' in interface:
-        exit(
-            '[-] Wired interface found as default route, please connect wirelessly and retry, or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
+        exit('[-] Wired interface found as default route, please connect wirelessly and retry, or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
     if args.ipaddress:
         victimIP = args.ipaddress
     else:
@@ -1276,6 +1275,7 @@ def iwconfig():
     DN = open(os.devnull, 'w')
     proc = Popen(['iwconfig'], stdout=PIPE, stderr=DN)
     for line in proc.communicate()[0].split('\n'):
+        print line
         if len(line) == 0: continue  # Isn't an empty string
         if line[0] != ' ':  # Doesn't start with space
             wired_search = re.search('eth[0-9]|em[0-9]|p[1-9]p[1-9]', line)
