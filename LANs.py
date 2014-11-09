@@ -126,21 +126,21 @@ def parse_args():
     ###############################
     parser.add_argument("-s", "--skip", help="Skip deauthing this MAC address. Example: -s 00:11:BB:33:44:AA")
     parser.add_argument("-ch", "--channel",
-                        help="Listen on and deauth only clients on the specified channel. Example: -ch 6")  #######################################I Changed this!!!###############################3333
+                        help="Listen on and deauth only clients on the specified channel. Example: -ch 6") 
     parser.add_argument("-m", "--maximum",
                         help="Choose the maximum number of clients to deauth. List of clients will be emptied and repopulated after hitting the limit. Example: -m 5")
     parser.add_argument("-no", "--noupdate",
                         help="Do not clear the deauth list when the maximum (-m) number of client/AP combos is reached. Must be used in conjunction with -m. Example: -m 10 -n",
-                        action='store_true')  #####################I changed this!!!#########################33
+                        action='store_true') 
     parser.add_argument("-t", "--timeinterval",
                         help="Choose the time interval between packets being sent. Default is as fast as possible. If you see scapy errors like 'no buffer space' try: -t .00001")
     parser.add_argument("--packets",
-                        help="Choose the number of packets to send in each deauth burst. Default value is 1; 1 packet to the client and 1 packet to the AP. Send 2 deauth packets to the client and 2 deauth packets to the AP: -p 2")  #####################I changed this!!!!##############################
+                        help="Choose the number of packets to send in each deauth burst. Default value is 1; 1 packet to the client and 1 packet to the AP. Send 2 deauth packets to the client and 2 deauth packets to the AP: -p 2")  
     parser.add_argument("--directedonly",
                         help="Skip the deauthentication packets to the broadcast address of the access points and only send them to client/AP pairs",
-                        action='store_true')  #######################I changed this!!!########################################3
+                        action='store_true')  
     parser.add_argument("--accesspoint",
-                        help="Enter the MAC address of a specific access point to target")  ##############I changed this!!!##############33
+                        help="Enter the MAC address of a specific access point to target")
     return parser.parse_args()
 
 #Console colors
@@ -640,9 +640,7 @@ class Parser():
             self.cookies(host, header_lines)
 
     def http_parser(self, load, ack, dport):
-
         load = repr(load)[1:-1]
-
         # Catch fragmented HTTP posts
         if dport == 80 and load != '':
             if ack == self.oldHTTPack:
@@ -673,15 +671,21 @@ class Parser():
                 logger.write('[*] ' + url + '\n')
 
             if self.args.urlspy:
-                d = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
-                if any(i in url for i in d):
-                    return
-                if len(url) > 146:
-                    print '[*] ' + url[:145]
-                    logger.write('[*] ' + url[:145] + '\n')
-                else:
-                    print '[*] ' + url
-                    logger.write('[*] ' + url + '\n')
+                tempURL = url
+                tempURL.split("?")[0]   #Strip all data (e.g. www.google.com/?g=5 goes to www.google.com/)
+                tempURL.strip("/")      #Strip all /
+                fileFilterList = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
+                printURL = True # default to printing URL
+                for fileType in fileFilterList:
+                    if tempURL.endswith(fileType):
+                        printURL = False #Don't print if it is one of the bad file types
+                if printURL:
+                    if len(url) > 146:
+                        print '[*] ' + url[:145]
+                        logger.write('[*] ' + url[:145] + '\n')
+                    else:
+                        print '[*] ' + url
+                        logger.write('[*] ' + url + '\n')
 
             # Print search terms
             if self.args.post or self.args.urlspy:
