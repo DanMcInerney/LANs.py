@@ -153,8 +153,6 @@ C = '\033[36m'  # cyan
 GR = '\033[37m'  # gray
 T = '\033[93m'  # tan
 
-logger = open('LANspy.log.txt', 'w+')
-DN = open(os.devnull, 'w')
 #############################
 ##### Start LANs.py Code####
 ############################
@@ -1589,6 +1587,8 @@ def stop(signal, frame):
 if __name__ == "__main__":
     if not os.geteuid() == 0:
         exit("\nPlease run as root\n")
+    logger = open('LANspy.log.txt', 'w+')
+    DN = open(os.devnull, 'w')
     args = parse_args()
     if args.pcap:
         pcap_handler(args)
