@@ -671,8 +671,8 @@ class Parser():
 
             if self.args.urlspy:
                 tempURL = url
-                tempURL.split("?")[0]   #Strip all data (e.g. www.google.com/?g=5 goes to www.google.com/)
-                tempURL.strip("/")      #Strip all /
+                tempURL = tempURL.split("?")[0]   #Strip all data (e.g. www.google.com/?g=5 goes to www.google.com/)
+                tempURL = tempURL.strip("/")      #Strip all /
                 fileFilterList = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
                 printURL = True # default to printing URL
                 for fileType in fileFilterList:
