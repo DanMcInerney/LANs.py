@@ -7,7 +7,7 @@ LANs.py
 * Also can be used to continuosly jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine tuned to allow jamming of everyone or even just one client. (Cannot jam WiFi and spy simultaneously) 
 
 
-Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you choose not to use the -ip option
+Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you don't know the IP of your target. 
 
 Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
@@ -32,7 +32,6 @@ Python LANs.py  [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC]
 python LANs.py -u -p
 ```
 Active target identification which ARP spoofs the chosen target and outputs all the interesting non-HTTPS data they send or request. There's no -ip option so this will ARP scan the network, compare it to a live running promiscuous capture, and list all the clients on the network. Attempts to tag the targets with a Windows netbios name and prints how many data packets they are sending/receiving. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. Ctrl-C when you're ready and pick your target which it will then ARP spoof.
-
 
 Supports interception and harvesting of data from the following protocols: HTTP, FTP, IMAP, POP3, IRC. Will print the first 135 characters of URLs visited and ignore URLs ending in .jpg, .jpeg, .gif, .css, .ico, .js, .svg, and .woff. Will also print all protocol username/passwords entered, searches made on any site, emails sent/received, and IRC messages sent/received. Screenshot: http://i.imgur.com/kQofTYP.png 
 
