@@ -64,7 +64,6 @@ from twisted.internet.protocol import Protocol, Factory
 from sys import exit
 from threading import Thread, Lock
 import argparse
-import signal
 from base64 import b64decode
 from subprocess import *
 from zlib import decompressobj, decompress
@@ -126,19 +125,19 @@ def parse_args():
     ###############################
     parser.add_argument("-s", "--skip", help="Skip deauthing this MAC address. Example: -s 00:11:BB:33:44:AA")
     parser.add_argument("-ch", "--channel",
-                        help="Listen on and deauth only clients on the specified channel. Example: -ch 6") 
+                        help="Listen on and deauth only clients on the specified channel. Example: -ch 6")
     parser.add_argument("-m", "--maximum",
                         help="Choose the maximum number of clients to deauth. List of clients will be emptied and repopulated after hitting the limit. Example: -m 5")
     parser.add_argument("-no", "--noupdate",
                         help="Do not clear the deauth list when the maximum (-m) number of client/AP combos is reached. Must be used in conjunction with -m. Example: -m 10 -n",
-                        action='store_true') 
+                        action='store_true')
     parser.add_argument("-t", "--timeinterval",
                         help="Choose the time interval between packets being sent. Default is as fast as possible. If you see scapy errors like 'no buffer space' try: -t .00001")
     parser.add_argument("--packets",
-                        help="Choose the number of packets to send in each deauth burst. Default value is 1; 1 packet to the client and 1 packet to the AP. Send 2 deauth packets to the client and 2 deauth packets to the AP: -p 2")  
+                        help="Choose the number of packets to send in each deauth burst. Default value is 1; 1 packet to the client and 1 packet to the AP. Send 2 deauth packets to the client and 2 deauth packets to the AP: -p 2")
     parser.add_argument("--directedonly",
                         help="Skip the deauthentication packets to the broadcast address of the access points and only send them to client/AP pairs",
-                        action='store_true')  
+                        action='store_true')
     parser.add_argument("--accesspoint",
                         help="Enter the MAC address of a specific access point to target")
     return parser.parse_args()
@@ -166,23 +165,24 @@ def LANsMain(args):
     ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
     ipr = ipr.communicate()[0]
     iprs = ipr.split('\n')
-    routerIP = None
+    ipr = ipr.split()
+    if args.routerip:
+        routerIP = args.routerip
+    else:
+        try:
+            routerIP = ipr[2]
+        except:
+            exit("You must be connected to the internet to use this.")
     for r in iprs:
         if '/' in r:
             IPprefix = r.split()[0]
-        if r.startswith('default'):
-            if not args.interface:
-                interface = r.split()[4]
-            if not args.routerip:
-                routerIP = r.split()[2]
-    if args.routerip:
-        routerIP = args.routerip
-    if not routerIP:
-        exit("[-] You must be connected to the internet to use this.")
     if args.interface:
         interface = args.interface
+    else:
+        interface = ipr[4]
     if 'eth' in interface or 'p3p' in interface:
-        exit('[-] Wired interface found as default route, please connect wirelessly and retry, or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
+        exit(
+            '[-] Wired interface found as default route, please connect wirelessly and retry, or specify the active interface with the -i [interface] option. See active interfaces with [ip addr] or [ifconfig].')
     if args.ipaddress:
         victimIP = args.ipaddress
     else:
@@ -670,14 +670,18 @@ class Parser():
                 logger.write('[*] ' + url + '\n')
 
             if self.args.urlspy:
-                tempURL = url
-                tempURL.split("?")[0]   #Strip all data (e.g. www.google.com/?g=5 goes to www.google.com/)
-                tempURL.strip("/")      #Strip all /
                 fileFilterList = ['.jpg', '.jpeg', '.gif', '.png', '.css', '.ico', '.js', '.svg', '.woff']
+                domainFilterList = ['adzerk.net', 'adwords.google.com', 'googleads.g.doubleclick.net', 'pagead2.googlesyndication.com']
+                tempURL = url
+                tempURL = tempURL.split("?")[0]   #Strip all data (e.g. www.google.com/?g=5 goes to www.google.com/)
+                tempURL = tempURL.strip("/")      #Strip all /
                 printURL = True # default to printing URL
-                for fileType in fileFilterList:
+                for fileType in fileFilterList: #Used to check if it is one of the blacklisted file types
                     if tempURL.endswith(fileType):
                         printURL = False #Don't print if it is one of the bad file types
+                for blockedDomain in domainFilterList:
+                    if blockedDomain in tempURL:
+                        printURL = False #Don't print if it is one of the blocked domains
                 if printURL:
                     if len(url) > 146:
                         print '[*] ' + url[:145]
@@ -1275,7 +1279,6 @@ def iwconfig():
     DN = open(os.devnull, 'w')
     proc = Popen(['iwconfig'], stdout=PIPE, stderr=DN)
     for line in proc.communicate()[0].split('\n'):
-        print line
         if len(line) == 0: continue  # Isn't an empty string
         if line[0] != ' ':  # Doesn't start with space
             wired_search = re.search('eth[0-9]|em[0-9]|p[1-9]p[1-9]', line)
