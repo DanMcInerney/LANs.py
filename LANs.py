@@ -72,7 +72,7 @@ from cStringIO import StringIO
 import requests
 import sys
 import time
-from signal import SIGINT, signal
+#from signal import SIGINT, signal
 import signal
 import socket
 import fcntl
@@ -1246,7 +1246,7 @@ def wifijammerMain(args):
     hop.daemon = True
     hop.start()
 
-    signal(SIGINT, stop)
+    signal.signal(signal.SIGINT, stop)
 
     try:
         sniff(iface=mon_iface, store=0, prn=cb)
