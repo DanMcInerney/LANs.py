@@ -37,28 +37,21 @@ def module_check(module):
         exit('[-] Exiting due to missing dependency')
 
 import os
-
 try:
     import nfqueue
 except Exception:
+    raise
     module_check('nfqueue')
     import nfqueue
 import logging
 
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
-try:
-    from scapy.all import *
-except Exception:
-    module_check('scapy')
-    from scapy.all import *
+from scapy.all import *
 conf.verb = 0
 # Below is necessary to receive a response to the DHCP packets because we're sending to 255.255.255.255 but receiving from the IP of the DHCP server
 conf.checkIPaddr = 0
-try:
-    from twisted.internet import reactor
-except Exception:
-    module_check('twisted')
-    from twisted.internet import reactor
+from twisted.internet import reactor
+from twisted.internet import reactor
 from twisted.internet.interfaces import IReadDescriptor
 from twisted.internet.protocol import Protocol, Factory
 from sys import exit
