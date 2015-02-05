@@ -101,7 +101,7 @@ python LANs.py --jam
 #### Jam just one access point (router)
 ``` shell
 python Lans.py --jam --accesspoint 01:MA:C0:AD:DY
-
+```
 
 ### All options:
 -----
