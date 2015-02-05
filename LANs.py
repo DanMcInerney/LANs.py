@@ -13,13 +13,13 @@ Prerequisites: Linux
 
 Note:          This script flushes iptables before and after usage.
 
-To do:         1. Rogue DHCP server
-               2. Refactor with lots of smaller functions
-               3. Mass wifi jammer
-               4. Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
-               5. Add karma MITM technique
-               6. Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
-               7. Integrate with wifite
+To do:          
+                *** Finish https://github.com/DanMcInerney/net-creds and plug it in as the LANs.py main cred engine
+                Refactor with lots of smaller functions
+                Cookie saver so you can browse using their cookies (how to use nfqueue with multiple queues?)
+                Add karma MITM technique
+                Add SSL proxy for self-signed cert, and make the script force a single JS popup saying there's a temporary problem with SSL validation and to just click through
+                Integrate with wifite would be cool
 
 '''
 
@@ -133,6 +133,8 @@ def parse_args():
                         action='store_true')
     parser.add_argument("--accesspoint",
                         help="Enter the MAC address of a specific access point to target")
+    parser.add_argument("--jam",
+                        help="Jam all wifi in range", action="store_true")
     return parser.parse_args()
 
 #Console colors
@@ -154,6 +156,7 @@ interface = ''
 
 def LANsMain(args):
     global victimIP, interface
+
     #Find the gateway and interface
     ipr = Popen(['/sbin/ip', 'route'], stdout=PIPE, stderr=DN)
     ipr = ipr.communicate()[0]
@@ -1248,7 +1251,6 @@ def wifijammerMain(args):
         print '\n[' + R + '!' + W + '] Closing'
         sys.exit(0)
 
-
 def get_mon_iface(args):
     global monitor_on
     monitors, interfaces = iwconfig()
@@ -1594,16 +1596,8 @@ if __name__ == "__main__":
     if args.pcap:
         pcap_handler(args)
         exit('[-] Finished parsing pcap file')
-    if args.skip is not None or args.channel is not None or args.maximum is not None or args.noupdate is not False or args.timeinterval is not None or args.packets is not None or args.directedonly is not False or args.accesspoint is not None:
-        ###If wifijammer arguments are given
-        if args.beef is not None or args.code is not None or args.urlspy is not False or args.ipaddress is not None or args.victimmac is not None or args.driftnet is not False or args.verboseURL is not False or args.dnsspoof is not None or args.dnsall is not False or args.setoolkit is not False or args.post is not False or args.nmapaggressive is not False or args.nmap is not False or args.redirectto is not None or args.routerip is not None or args.routermac is not None or args.pcap is not None:
-            ###If LANs.py arguments are given
-            ###Both LANs.py arguments and wifijammer arguments are given. This will not work since wifijammer jams the network that LANs.py is trying to monitor
-            exit('Error. Cannot jam WiFi and monitor WiFi simultaneously')
 
-    if args.beef is not None or args.code is not None or args.urlspy is not False or args.ipaddress is not None or args.victimmac is not None or args.driftnet is not False or args.verboseURL is not False or args.dnsspoof is not None or args.dnsall is not False or args.setoolkit is not False or args.post is not False or args.nmapaggressive is not False or args.nmap is not False or args.redirectto is not None or args.routerip is not None or args.routermac is not None or args.pcap is not None:
-        ###If LANs.py arguments are given, then run as LANs.py
-        LANsMain(args)
-    else:
-        ###If no LANs.py arguments are given, then run as wifijammer (expected behavior of jamming wifi when no arguments given is continued)
+    if args.jam:
         wifijammerMain(args)
+    else:
+        LANsMain(args)
