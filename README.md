@@ -1,3 +1,5 @@
+If you have any issues running this script I'd suggest checking out [MITMf](https://github.com/byt3bl33d3r/MITMf) which does all the same things + more. Eventually this script needs to be rewritten with net-creds as the engine.
+
 LANs.py
 ========
 
