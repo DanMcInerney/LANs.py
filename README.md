@@ -82,7 +82,7 @@ python LANs.py -a -r 80.87.128.67
 ``` shell
 python LANs.py -dns eff.org
 ```
-Example 1: The -a option will spoof every single DNS request the victim makes and when used in conjuction with -r it will redirect them to -r's argument address. The victim will be redirected to stallman.org (80.87.128.67) no matter what they type in the address bar.  
+Example 1: The -a option will spoof every single DNS request the victim makes and when used in conjunction with -r it will redirect them to -r's argument address. The victim will be redirected to stallman.org (80.87.128.67) no matter what they type in the address bar.  
 
 Example 2: This will spoof the domain eff.org and subdomains of eff.org. When there is no -r argument present with the -a or -dns arguments the script will default to sending the victim to the attacker's IP address. If the victim tries to go to eff.org they will be redirected to the attacker's IP.
 
