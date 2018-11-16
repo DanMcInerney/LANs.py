@@ -1,5 +1,8 @@
 LANs.py
 ========
+*** NOTE ***
+I do not maintain this anymore. I highly suggest using bettercap instead for ARP and MITM needs.
+
 
 * Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. 
     * Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
