@@ -1368,7 +1368,7 @@ def channel_hop(mon_iface, args):
 
             proc = Popen(['iw', 'dev', mon_iface, 'set', 'channel', monchannel], stdout=DN, stderr=PIPE)
             for line in proc.communicate()[1].split('\n'):
-                if len(line) > 2:  # iw dev shouldnt display output unless there's an error
+                if len(line) > 2:  # iw dev shouldn't display output unless there's an error
                     err = '[' + R + '-' + W + '] Channel hopping failed: ' + R + line + W
 
         output(err, monchannel)
